@@ -1,0 +1,51 @@
+replicaCount: 1
+
+image:
+  repository: azureks.azurecr.io/kube-tools/nest
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets:
+  - name: regcred
+
+nameOverride: "nest"
+fullnameOverride: "nest"
+
+# environment:
+#   envFrom:
+#     - secretName: nest-env
+
+probes:
+  endpoints:
+    liveness: "/api/health/alive"
+    readiness: "/api/health/ready"
+  initialDelay: 5
+  interval: 10
+  timeout: 120
+
+serviceAccount:
+  create: true
+  name: "nest"
+
+service:
+  type: ClusterIP
+  port: 80
+  name: "nest"
+
+ingress:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 125m
+    memory: 500Mi
+  requests:
+    cpu: 75m
+    memory: 300Mi
+    
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 85
+  targetMemoryUtilizationPercentage: 90

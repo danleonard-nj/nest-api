@@ -1,0 +1,12 @@
+framework==0.2.7
+pymongo
+azure-servicebus
+swagger-gen
+quart
+uvloop
+uvicorn
+python-dotenv
+aioredis
+deprecated
+httpx
+motor
