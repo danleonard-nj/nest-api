@@ -12,7 +12,7 @@ from clients.email_gateway_client import EmailGatewayClient
 from clients.event_client import EventClient
 from clients.identity_client import IdentityClient
 from clients.nest_client import NestClient
-from data.nest_repository import NestDeviceRepository, NestSensorRepository
+from data.nest_repository import NestDeviceRepository, NestLogRepository, NestSensorRepository
 from domain.auth import AuthPolicy
 from services.command_service import NestCommandService
 from services.event_service import EventService
@@ -68,6 +68,7 @@ def register_clients(descriptors: ServiceCollection):
 def register_repositories(descriptors: ServiceCollection):
     descriptors.add_singleton(NestDeviceRepository)
     descriptors.add_singleton(NestSensorRepository)
+    descriptors.add_singleton(NestLogRepository)
 
 
 def register_services(descriptors: ServiceCollection):

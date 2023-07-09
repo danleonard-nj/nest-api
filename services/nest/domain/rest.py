@@ -24,7 +24,6 @@ class SaveNestAuthCredentialRequest(Serializable):
         self.client_secret = data.get('client_secret')
         self.refresh_token = data.get('refresh_token')
 
-
 class NestSensorDataRequest(Serializable):
     def __init__(
         self,
@@ -35,8 +34,9 @@ class NestSensorDataRequest(Serializable):
         degrees_celsius = data.get('degrees_celsius', 0)
         humidity_percent = data.get('humidity_percent', 0)
 
-        self.degrees_celsius = round(degrees_celsius, 2)
-        self.humidity_percent = round(humidity_percent, 2)
+        self.degrees_celsius = round(degrees_celsius or 0, 2)
+        self.humidity_percent = round(humidity_percent or 0, 2)
+        self.diagnostics = data.get('diagnostics')
 
 
 class NestCommandRequest(Serializable):
@@ -46,3 +46,14 @@ class NestCommandRequest(Serializable):
     ):
         self.command_type = data.get('command_type')
         self.params = data.get('params')
+
+
+class NestSensorLogRequest(Serializable):
+    def __init__(
+        self,
+        data: Dict
+    ):
+        self.device_id = data.get('device_id')
+        self.log_level = data.get('log_level')
+        self.message = data.get('message')
+

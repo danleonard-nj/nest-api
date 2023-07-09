@@ -1,3 +1,5 @@
+import asyncio
+from faulthandler import is_enabled
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -11,20 +13,23 @@ from framework.logger import get_logger
 
 from clients.email_gateway_client import EmailGatewayClient
 from clients.nest_client import NestClient
-from data.nest_repository import NestDeviceRepository, NestSensorRepository
+from data.nest_repository import (NestDeviceRepository, NestLogRepository,
+                                  NestSensorRepository)
 from domain.cache import CacheKey
+from domain.features import Feature
 from domain.nest import (HealthStatus, NestSensorData,
                          NestSensorDataQueryResult, NestSensorDevice,
                          NestThermostat, SensorDataPurgeResult, SensorHealth,
                          SensorHealthStats, SensorPollResult)
-from domain.rest import NestSensorDataRequest
+from domain.rest import NestSensorDataRequest, NestSensorLogRequest
 from services.event_service import EventService
 from utils.utils import DateTimeUtil
+from framework.clients.feature_client import FeatureClientAsync
 
 logger = get_logger(__name__)
 
-SENSOR_UNHEALTHY_SECONDS = 4
-DEFAULT_PURGE_DAYS = 90
+SENSOR_UNHEALTHY_SECONDS = 60
+DEFAULT_PURGE_DAYS = 270
 
 
 class NestService:
@@ -34,16 +39,15 @@ class NestService:
         nest_client: NestClient,
         sensor_repository: NestSensorRepository,
         device_repository: NestDeviceRepository,
+        log_repository: NestLogRepository,
         event_service: EventService,
         email_gateway: EmailGatewayClient,
-        cache_client: CacheClientAsync
+        cache_client: CacheClientAsync,
+        feature_client: FeatureClientAsync
     ):
         self.__thermostat_id = configuration.nest.get(
             'thermostat_id')
-        self.__purge_days = configuration.nest.get(
-            'purge_days', DEFAULT_PURGE_DAYS)
-        self.__purge_days = configuration.nest.get(
-            'purge_days', DEFAULT_PURGE_DAYS)
+        self.__purge_days = DEFAULT_PURGE_DAYS
 
         self.__nest_client = nest_client
         self.__sensor_repository = sensor_repository
@@ -51,6 +55,8 @@ class NestService:
         self.__event_service = event_service
         self.__email_gateway = email_gateway
         self.__cache_client = cache_client
+        self.__log_repository = log_repository
+        self.__feature_client = feature_client
 
     async def get_thermostat(
         self
@@ -69,6 +75,15 @@ class NestService:
         sensor_request: NestSensorDataRequest
     ) -> NestSensorData:
 
+        logger.info(f'Logging sensor data: {sensor_request.sensor_id}')
+
+        is_enabled = await self.__feature_client.is_enabled(
+            feature_key=Feature.NestSensorDataIngestion)
+
+        if not is_enabled:
+            logger.info(f'Nest sensor data ingestion is disabled')
+            return
+
         sensor = await self.__get_sensor(
             device_id=sensor_request.sensor_id)
 
@@ -77,8 +92,8 @@ class NestService:
             raise Exception(
                 f"No sensor with the ID '{sensor_request.sensor_id}' exists")
 
-        last_record = await self.__get_top_sensor_record(
-            device_id=sensor_request.sensor_id)
+        # last_record = await self.__get_top_sensor_record(
+        #     device_id=sensor_request.sensor_id)
 
         # Create the sensor data record w/ stats
         sensor_data = NestSensorData(
@@ -86,15 +101,12 @@ class NestService:
             sensor_id=sensor_request.sensor_id,
             humidity_percent=sensor_request.humidity_percent,
             degrees_celsius=sensor_request.degrees_celsius,
-            timestamp=DateTimeUtil.timestamp())
-
-        logger.info(f'Capturing sensor data: {sensor_data}')
+            timestamp=DateTimeUtil.timestamp(),
+            diagnostics=sensor_request.diagnostics)
 
         # Write the new sensor data
-        result = await self.__sensor_repository.insert(
+        await self.__sensor_repository.insert(
             document=sensor_data.to_dict())
-
-        logger.info(f'Success: {result.acknowledged}')
 
         return sensor_data
 
@@ -118,6 +130,15 @@ class NestService:
         })
 
         logger.info(f'Deleted: {result.deleted_count}')
+
+        if result.deleted_count > 0:
+            logger.info('Sending purge result email')
+            await self.__email_gateway.send_email(
+                recipient='dcl525@gmail.com',
+                subject='Sensor Data Service',
+                body=self.__get_email_message_body(
+                    cutoff_date=cutoff_date,
+                    deleted_count=result.deleted_count))
 
         email_request, endpoint = self.__email_gateway.get_email_request(
             recipient='dcl525@gmail.com',
@@ -189,7 +210,7 @@ class NestService:
                 for entity in entities
             ]
 
-            tasks.add_task(self.group_device_sensor_data(
+            tasks.add_task(self.__group_device_sensor_data(
                 device_id=device_id,
                 sensor_data=sensor_data))
 
@@ -197,7 +218,7 @@ class NestService:
 
         return results
 
-    async def group_device_sensor_data(
+    async def __group_device_sensor_data(
         self,
         device_id: str,
         sensor_data: List[NestSensorData]
@@ -216,35 +237,19 @@ class NestService:
             device_id=device_id,
             data=grouped.to_dict(orient='records'))
 
-    def __to_dataframe(
-        self,
-        sensor_data: List[NestSensorData]
-    ):
-        data = list()
-        for entry in sensor_data:
-            data.append({
-                'key': entry.key,
-                'degrees_celsius': entry.degrees_celsius,
-                'degrees_fahrenheit': entry.degrees_fahrenheit,
-                'humidity_percent': entry.humidity_percent,
-                'timestamp': entry.get_timestamp_datetime()
-            })
+    # async def __get_cached_group_sensor_data(
+    #     self,
+    #     device_id: str,
+    #     key: str
+    # ):
+    #     cache_key = CacheKey.nest_device_grouped_sensor_data(
+    #         device_id=device_id,
+    #         key=key)
 
-        return pd.DataFrame(data)
+    #     logger.info(f'Get device sensor data: {cache_key}')
 
-    async def get_cached_group_sensor_data(
-        self,
-        device_id: str,
-        key: str
-    ):
-        cache_key = CacheKey.nest_device_grouped_sensor_data(
-            device_id=device_id,
-            key=key)
-
-        logger.info(f'Get device sensor data: {cache_key}')
-
-        data = await self.__cache_client.get_json(
-            key=cache_key)
+    #     data = await self.__cache_client.get_json(
+    #         key=cache_key)
 
     async def __get_top_sensor_record(
         self,
@@ -277,6 +282,12 @@ class NestService:
         self,
         record: NestSensorData
     ) -> Tuple[str, int]:
+
+        if record is None:
+            return (
+                HealthStatus.Unhealthy,
+                0
+            )
 
         now = DateTimeUtil.timestamp()
 
@@ -315,7 +326,9 @@ class NestService:
 
             stats = SensorHealthStats(
                 status=health_status,
-                last_contact=last_record.timestamp,
+                last_contact=(last_record.timestamp
+                              if last_record is not None
+                              else 0),
                 seconds_elapsed=seconds_elapsed)
 
             health = SensorHealth(
@@ -333,12 +346,29 @@ class NestService:
         device_id: str
     ) -> NestSensorDevice:
 
+        cache_key = CacheKey.nest_device(
+            device_id=device_id)
+
+        entity = await self.__cache_client.get_json(
+            key=cache_key)
+
+        if entity is not None:
+            logger.info(f'Cache hit: {cache_key}')
+            return NestSensorDevice.from_entity(
+                data=entity)
+
+        logger.info(f'Cache miss: {cache_key}')
         entity = await self.__device_repository.get({
             'device_id': device_id
         })
 
         if entity is None:
             return None
+
+        logger.info(f'Cache set: {cache_key}')
+        asyncio.create_task(self.__cache_client.set_json(
+            key=cache_key,
+            value=entity))
 
         device = NestSensorDevice.from_entity(
             data=entity)
@@ -388,6 +418,58 @@ class NestService:
 
         return results
 
+    async def log_message(
+        self,
+        req: NestSensorLogRequest
+    ):
+        logger.info(f'Logging message: {req.message}')
+
+        log_message = {
+            'log_id': str(uuid.uuid4()),
+            'device_id': req.device_id,
+            'log_level': req.log_level,
+            'message': req.message,
+            'timestamp': DateTimeUtil.timestamp(),
+        }
+
+        await self.__log_repository.insert(
+            document=log_message)
+
+        return log_message
+
+    async def send_sensor_failure_email(
+        self,
+        req: NestSensorLogRequest
+    ):
+        logger.info(f'Sending sensor failure email: {req.device_id}')
+
+        device = await self.__get_sensor(
+            device_id=req.device_id)
+
+        timestamp = DateTimeUtil.iso_from_timestamp(
+            timestamp=req.timestamp)
+
+        msg = 'Sensor Data Service\n'
+        msg += '\n'
+        msg += f'Device ID: {device.device_id}\n'
+        msg += f'Ddevice Name: {device.device_name}\n'
+        msg += '\n'
+        msg += f'Error Type: {req.error_type}\n'
+        msg += f'Error Message: {req.message}\n'
+        msg += f'Timestamp: {timestamp}\n'
+
+        message, endpoint = self.__email_gateway.get_email_request(
+            recipient='dcl525@gmail.com',
+            subject='ESP8266 Error',
+            body=msg)
+
+        logger.info(f'Dispatching event message: {message.to_dict()}')
+        logger.info(f'Event endpoint: {endpoint}')
+
+        await self.__event_service.dispatch_email_event(
+            endpoint=endpoint,
+            message=message.to_dict())
+
     def __get_sensor_failure_email_message_body(
         self,
         device: NestSensorDevice,
@@ -407,3 +489,21 @@ class NestService:
         msg += '\n'
         msg += f'Cutoff Date: {cutoff_date.isoformat()}\n'
         msg += f'Count: {deleted_count}\n'
+
+        return msg
+
+    def __to_dataframe(
+        self,
+        sensor_data: List[NestSensorData]
+    ):
+        data = list()
+        for entry in sensor_data:
+            data.append({
+                'key': entry.key,
+                'degrees_celsius': entry.degrees_celsius,
+                'degrees_fahrenheit': entry.degrees_fahrenheit,
+                'humidity_percent': entry.humidity_percent,
+                'timestamp': entry.get_datetime_from_timestamp()
+            })
+
+        return pd.DataFrame(data)

@@ -5,7 +5,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+from framework.logger import get_logger
 from framework.serialization import Serializable
+
+logger = get_logger(__name__)
 
 
 def to_fahrenheit(
@@ -14,17 +17,6 @@ def to_fahrenheit(
     if celsius is None or celsius == 0:
         return 0
     return round((celsius * 9/5) + 32, 1)
-
-
-class NestConfiguration:
-    def __init_(
-        self,
-        data: Dict
-    ):
-        self.expiration_minutes = data.get('expiration_minutes')
-        self.notification_recipients = data.get('notification_recipients')
-        self.contacts = data.get('contacts')
-        self.created_date = data.get('created_date')
 
 
 class NestThermostatMode:
@@ -158,12 +150,6 @@ class NestThermostat(Serializable):
         self.heat_celsius = heat_celsius
         self.cool_celsius = cool_celsius
         self.ambient_temperature_celsius = ambient_temperature_celsius
-
-    def __to_fahrenheit(
-        self,
-        celsius: float
-    ) -> float:
-        return (celsius * 9/5) + 32
 
     def to_dict(self) -> Dict:
         return super().to_dict() | {
@@ -308,13 +294,15 @@ class NestSensorData(Serializable):
         sensor_id: str,
         degrees_celsius: float,
         humidity_percent: float,
-        timestamp: int
+        timestamp: int,
+        diagnostics: Dict = None
     ):
         self.record_id = record_id
         self.sensor_id = sensor_id
         self.degrees_celsius = round(degrees_celsius, 3)
         self.humidity_percent = round(humidity_percent, 3)
         self.timestamp = timestamp
+        self.diagnostics = diagnostics or dict()
 
         self.degrees_fahrenheit = to_fahrenheit(
             celsius=degrees_celsius)
@@ -333,7 +321,7 @@ class NestSensorData(Serializable):
         key = uuid.UUID(hashed.hexdigest())
         return str(key)
 
-    def get_timestamp_datetime(
+    def get_datetime_from_timestamp(
         self
     ) -> datetime:
 
@@ -348,7 +336,8 @@ class NestSensorData(Serializable):
             sensor_id=data.get('sensor_id'),
             degrees_celsius=data.get('degrees_celsius'),
             humidity_percent=data.get('humidity_percent'),
-            timestamp=data.get('timestamp'))
+            timestamp=data.get('timestamp'),
+            diagnostics=data.get('diagnostics'))
 
 
 class NestSensorDevice(Serializable):
@@ -388,23 +377,23 @@ class SensorDataPurgeResult(Serializable):
         self.deleted = deleted
 
 
-class HealthStatus:
+class HealthStatus(enum.StrEnum):
     Healthy = 'healthy'
     Unhealthy = 'unhealthy'
 
 
-class ThermostatMode:
+class ThermostatMode(enum.StrEnum):
     Heat = 'HEAT'
     Cool = 'COOL'
     Range = 'HEATCOOL'
     Off = 'OFF'
 
 
-class NestCommandType:
-    SetRange = 'SetRange'
-    SetHeat = 'SetHeat'
-    SetCool = 'SetCool'
-    SetPowerOff = 'SetPowerOff'
+class NestCommandType(enum.StrEnum):
+    SetRange = 'set-range'
+    SetHeat = 'set-heat'
+    SetCool = 'set-cool'
+    SetPowerOff = 'set-power-off'
 
 
 class SensorHealthStats(Serializable):
