@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2beta1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "kasa.fullname" . }}
+  name: {{ include "nest.fullname" . }}
   labels:
-    {{- include "kasa.labels" . | nindent 4 }}
+    {{- include "nest.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "kasa.fullname" . }}
+    name: {{ include "nest.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
