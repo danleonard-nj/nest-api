@@ -1,3 +1,5 @@
+from asyncio import create_task
+import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -25,7 +27,7 @@ logger = get_logger(__name__)
 
 SENSOR_UNHEALTHY_SECONDS = 4
 DEFAULT_PURGE_DAYS = 90
-
+EMAIL_PURGE_SERVICE_SUBJECT='Sensor Data Service'
 
 class NestService:
     def __init__(
@@ -44,13 +46,16 @@ class NestService:
             'purge_days', DEFAULT_PURGE_DAYS)
         self.__purge_days = configuration.nest.get(
             'purge_days', DEFAULT_PURGE_DAYS)
+        
+        self.__email_recipient = configuration.email.get(
+            'recipient')
 
         self.__nest_client = nest_client
         self.__sensor_repository = sensor_repository
         self.__device_repository = device_repository
         self.__event_service = event_service
         self.__email_gateway = email_gateway
-        self.__cache_client = cache_client
+        self.__cache_client: CacheClientAsync = cache_client
 
     async def get_thermostat(
         self
@@ -120,8 +125,8 @@ class NestService:
         logger.info(f'Deleted: {result.deleted_count}')
 
         email_request, endpoint = self.__email_gateway.get_email_request(
-            recipient='dcl525@gmail.com',
-            subject='Sensor Data Service',
+            recipient=self.__email_recipient,
+            subject=EMAIL_PURGE_SERVICE_SUBJECT,
             body=self.__get_email_message_body(
                 cutoff_date=cutoff_date,
                 deleted_count=result.deleted_count
@@ -171,12 +176,6 @@ class NestService:
     ):
         data = await self.get_sensor_data(
             start_timestamp=start_timestamp)
-
-        # with open(r'C:\temp\sensor_data.json', 'w') as file:
-        #     for device in data:
-        #         device['data'] = [x.to_dict() for x in device['data']]
-
-        #     file.write(json.dumps(data, default=str, indent=True))
 
         tasks = TaskCollection()
 
@@ -232,19 +231,19 @@ class NestService:
 
         return pd.DataFrame(data)
 
-    async def get_cached_group_sensor_data(
-        self,
-        device_id: str,
-        key: str
-    ):
-        cache_key = CacheKey.nest_device_grouped_sensor_data(
-            device_id=device_id,
-            key=key)
+    # async def get_cached_group_sensor_data(
+    #     self,
+    #     device_id: str,
+    #     key: str
+    # ):
+    #     cache_key = CacheKey.nest_device_grouped_sensor_data(
+    #         device_id=device_id,
+    #         key=key)
 
-        logger.info(f'Get device sensor data: {cache_key}')
+    #     logger.info(f'Get device sensor data: {cache_key}')
 
-        data = await self.__cache_client.get_json(
-            key=cache_key)
+    #     data = await self.__cache_client.get_json(
+    #         key=cache_key)
 
     async def __get_top_sensor_record(
         self,
@@ -266,8 +265,23 @@ class NestService:
         self
     ) -> List[NestSensorDevice]:
 
-        entities = await self.__device_repository.get_all()
+        cache_key = CacheKey.nest_devices()
+        
+        entities = await self.__cache_client.get_json(
+            key=cache_key)
 
+        if entities is None:
+            logger.info(f'Nest device cache miss: {cache_key}')
+                        
+            # Fetch devices from db
+            entities = await self.__device_repository.get_all()
+            
+            # Fire and forget the cache task
+            asyncio.create_task(self.__cache_client.set_json(
+                key=cache_key,
+                value=entities,
+                ttl=60 * 24 * 7))
+            
         devices = [NestSensorDevice.from_entity(data=entity)
                    for entity in entities]
 
@@ -387,6 +401,18 @@ class NestService:
             results.append(result)
 
         return results
+    
+    async def set_tempature_by_sensor(
+        self,
+        device_id: str,
+        degrees_fahrenheit: float
+    ):
+        logger.info(f'Setting tempature by sensor: {device_id}')
+
+        device = await self.__get_sensor(
+            device_id=device_id)
+
+        
 
     def __get_sensor_failure_email_message_body(
         self,
