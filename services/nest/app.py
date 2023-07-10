@@ -10,14 +10,6 @@ from routes.sensor import sensor_bp
 from routes.health import health_bp
 from utils.provider import ContainerProvider
 
-import logging
-from framework.logger import Loggers
-
-# logging.getLogger(Loggers.Authorization).setLevel(logging.DEBUG)
-# logging.getLogger(Loggers.Caching).setLevel(logging.DEBUG)
-# logging.getLogger(Loggers.DependencyInjection).setLevel(logging.DEBUG)
-logging.getLogger(Loggers.Configuration).setLevel(logging.DEBUG)
-
 
 load_dotenv()
 
