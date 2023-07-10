@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: azureks.azurecr.io/kube-tools/nest
+  repository: azureks.azurecr.io/kube-tools/nest-api
   pullPolicy: Always
   tag: "latest"
 
