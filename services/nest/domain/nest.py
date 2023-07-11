@@ -388,24 +388,23 @@ class SensorDataPurgeResult(Serializable):
         self.deleted = deleted
 
 
-class HealthStatus:
+class HealthStatus(enum.StrEnum):
     Healthy = 'healthy'
     Unhealthy = 'unhealthy'
 
 
-class ThermostatMode:
+class ThermostatMode(enum.StrEnum):
     Heat = 'HEAT'
     Cool = 'COOL'
     Range = 'HEATCOOL'
     Off = 'OFF'
 
 
-class NestCommandType:
-    SetRange = 'SetRange'
-    SetHeat = 'SetHeat'
-    SetCool = 'SetCool'
-    SetPowerOff = 'SetPowerOff'
-
+class NestCommandType(enum.StrEnum):
+    SetRange = 'set-range'
+    SetHeat = 'set-heat'
+    SetCool = 'set-cool'
+    SetPowerOff = 'set-power-off'
 
 class SensorHealthStats(Serializable):
     def __init__(
