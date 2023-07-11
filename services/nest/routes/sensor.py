@@ -4,10 +4,12 @@ from framework.di.service_provider import ServiceProvider
 from framework.logger.providers import get_logger
 from quart import request
 
-from domain.auth import AuthKey, AuthPolicy
-from domain.rest import NestSensorDataRequest
-from utils.meta import MetaBlueprint
+from domain.auth import AuthPolicy
+from domain.rest import NestSensorDataRequest, NestSensorLogRequest
 from services.nest_service import NestService
+from utils.meta import MetaBlueprint
+
+API_KEY_NAME = 'nest-sensor-api-key'
 
 logger = get_logger(__name__)
 
@@ -19,14 +21,27 @@ def default_start_timestamp():
     return int(date.timestamp())
 
 
-@sensor_bp.with_key_auth('/api/sensor/<sensor_id>/config', methods=['GET'], key_name=AuthKey.NestApiKey)
-async def get_sensor_config(container: ServiceProvider):
+@sensor_bp.configure('/api/sensor/purge', methods=['POST'], auth_scheme=AuthPolicy.Default)
+async def post_sensor_purge(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
 
-    # TODO: Return sensor config
+    return await service.purge_sensor_data()
 
 
-@sensor_bp.with_key_auth('/api/sensor', methods=['POST'], key_name=AuthKey.NestApiKey)
+@sensor_bp.with_key_auth('/api/sensor/log', methods=['POST'], key_name=API_KEY_NAME)
+async def post_sensor_log(container: ServiceProvider):
+    service: NestService = container.resolve(NestService)
+
+    body = await request.get_json()
+
+    req = NestSensorLogRequest(
+        data=body)
+
+    return await service.log_message(
+        req=req)
+
+
+@sensor_bp.with_key_auth('/api/sensor', methods=['POST'], key_name=API_KEY_NAME)
 async def post_sensor_data(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
 

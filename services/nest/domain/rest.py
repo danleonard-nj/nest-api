@@ -46,3 +46,14 @@ class NestCommandRequest(Serializable):
     ):
         self.command_type = data.get('command_type')
         self.params = data.get('params')
+
+
+class NestSensorLogRequest(Serializable):
+    def __init__(
+        self,
+        data: Dict
+    ):
+        self.device_id = data.get('device_id')
+        self.log_level = data.get('log_level')
+        self.message = data.get('message')
+
