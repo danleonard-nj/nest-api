@@ -5,6 +5,7 @@ from quart import request
 
 from domain.auth import AuthPolicy
 from domain.rest import NestCommandRequest
+from services.command_service import NestCommandService
 
 logger = get_logger(__name__)
 
@@ -23,3 +24,11 @@ async def post_command(container: ServiceProvider):
     return await service.handle_command(
         command_type=command_request.command_type,
         params=command_request.params)
+
+
+
+@command_bp.configure('/api/command', methods=['GET'], auth_scheme=AuthPolicy.Default)
+async def get_command(container: ServiceProvider):
+    service: NestCommandService = container.resolve(NestCommandService)
+
+    return await service.list_commands()
