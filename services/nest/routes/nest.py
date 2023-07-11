@@ -20,7 +20,7 @@ def default_start_timestamp():
     return int(date.timestamp())
 
 
-@nest_bp.configure('/api/nest/auth', methods=['GET'], auth_scheme=AuthPolicy.Default)
+@nest_bp.configure('/api/auth', methods=['GET'], auth_scheme=AuthPolicy.Default)
 async def get_auth_creds(container: ServiceProvider):
     service: NestClient = container.resolve(NestClient)
 
@@ -31,7 +31,7 @@ async def get_auth_creds(container: ServiceProvider):
     }
 
 
-@nest_bp.configure('/api/nest/thermostat', methods=['GET'], auth_scheme=AuthPolicy.Default)
+@nest_bp.configure('/api/thermostat', methods=['GET'], auth_scheme=AuthPolicy.Default)
 async def get_thermostat(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
 
