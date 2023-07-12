@@ -61,38 +61,51 @@ class NestClient:
         logger.info(f'Token fetched: {token}')
         return token
 
-    async def get_headers(
-        self
-    ):
-        token = await self.get_token()
-
-        return {
-            'Authorization': f'Bearer {token}'
-        }
-
     async def get_thermostat(
         self
     ) -> Dict:
-        headers = await self.get_headers()
+        headers = await self.__get_headers()
+
+        logger.info(f'Getting thermostat: {self.__device_id}')
+
+        endpoint = f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}'
+        logger.info(f'Endpoint: {endpoint}')
 
         response = await self.__http_client.get(
-            url=f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}',
+            url=endpoint,
             headers=headers)
 
+        logger.info(f'Thermostat fetched: {response.status_code}')
         return response.json()
 
     async def execute_command(
         self,
         command: Dict
     ):
-        headers = await self.get_headers()
+        logger.info(f'Executing command: {command}')
+        headers = await self.__get_headers()
+
+        endpoint = f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}:executeCommand'
+        logger.info(f'Endpoint: {endpoint}')
 
         response = await self.__http_client.post(
-            url=f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}:executeCommand',
+            url=endpoint,
             headers=headers,
             json=command)
 
+        logger.info(f'Command executed: {response.status_code}')
+
         return response.json()
+
+    async def __get_headers(
+        self
+    ) -> Dict:
+
+        token = await self.get_token()
+
+        return {
+            'Authorization': f'Bearer {token}'
+        }
 
     async def __fetch_token(
         self
@@ -108,6 +121,8 @@ class NestClient:
             response = await client.post(
                 url=self.__token_url,
                 data=payload)
+
+            logger.info(f'Nest auth token response: {response.status_code}')
 
             content = response.json()
             return content.get('access_token')

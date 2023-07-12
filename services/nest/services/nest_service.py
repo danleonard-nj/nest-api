@@ -23,8 +23,10 @@ from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
 
-SENSOR_UNHEALTHY_SECONDS = 4
+SENSOR_UNHEALTHY_SECONDS = 90
 DEFAULT_PURGE_DAYS = 90
+ALERT_EMAIL_SUBJECT = 'ESP8266 Sensor Failure'
+ALERT_EMAIL_RECIPIENT = 'dcl525@gmail.com'
 
 
 class NestService:
@@ -57,6 +59,7 @@ class NestService:
     ) -> NestThermostat:
 
         data = await self.__nest_client.get_thermostat()
+        logger.info(f'Nest thermostat data: {data}')
 
         thermostat = NestThermostat.from_json_object(
             data=data,
@@ -69,6 +72,7 @@ class NestService:
         sensor_request: NestSensorDataRequest
     ) -> NestSensorData:
 
+        logger.info(f'Logging sensor data: {sensor_request}')
         sensor = await self.__get_sensor(
             device_id=sensor_request.sensor_id)
 
@@ -88,7 +92,7 @@ class NestService:
             degrees_celsius=sensor_request.degrees_celsius,
             timestamp=DateTimeUtil.timestamp())
 
-        logger.info(f'Capturing sensor data: {sensor_data}')
+        logger.info(f'Capturing sensor data: {sensor_data.to_dict()}')
 
         # Write the new sensor data
         result = await self.__sensor_repository.insert(
@@ -127,6 +131,9 @@ class NestService:
                 deleted_count=result.deleted_count
             ))
 
+        logger.info(
+            f'Dispatching email event message: {email_request.to_dict()}')
+
         await self.__event_service.dispatch_email_event(
             endpoint=endpoint,
             message=email_request.to_dict())
@@ -147,10 +154,19 @@ class NestService:
             for entity in device_entities
         ]
 
+        # tasks = TaskCollection()
+        # for device in devices:
+        #     tasks.add_task(self.__sensor_repository.get_by_device(
+        #         device_id=device.device_id,
+        #         start_timestamp=start_timestamp))
+
+        # await tasks.run()
+
         results = list()
 
         for device in devices:
             logger.info(f'Fetching data for device: {device.device_id}')
+
             entities = await self.__sensor_repository.get_by_device(
                 device_id=device.device_id,
                 start_timestamp=start_timestamp)
@@ -158,10 +174,15 @@ class NestService:
             data = [NestSensorData.from_entity(data=entity)
                     for entity in entities]
 
-            results.append({
+            result = {
                 'device_id': device.device_id,
                 'data': data
-            })
+            }
+
+            logger.info(
+                f'Device: {device.device_id}: {len(data)} records fetched')
+
+            results.append(result)
 
         return results
 
@@ -171,12 +192,6 @@ class NestService:
     ):
         data = await self.get_sensor_data(
             start_timestamp=start_timestamp)
-
-        # with open(r'C:\temp\sensor_data.json', 'w') as file:
-        #     for device in data:
-        #         device['data'] = [x.to_dict() for x in device['data']]
-
-        #     file.write(json.dumps(data, default=str, indent=True))
 
         tasks = TaskCollection()
 
@@ -216,6 +231,20 @@ class NestService:
             device_id=device_id,
             data=grouped.to_dict(orient='records'))
 
+    async def get_cached_group_sensor_data(
+        self,
+        device_id: str,
+        key: str
+    ):
+        cache_key = CacheKey.nest_device_grouped_sensor_data(
+            device_id=device_id,
+            key=key)
+
+        logger.info(f'Get device sensor data: {cache_key}')
+
+        data = await self.__cache_client.get_json(
+            key=cache_key)
+
     def __to_dataframe(
         self,
         sensor_data: List[NestSensorData]
@@ -232,33 +261,23 @@ class NestService:
 
         return pd.DataFrame(data)
 
-    async def get_cached_group_sensor_data(
-        self,
-        device_id: str,
-        key: str
-    ):
-        cache_key = CacheKey.nest_device_grouped_sensor_data(
-            device_id=device_id,
-            key=key)
-
-        logger.info(f'Get device sensor data: {cache_key}')
-
-        data = await self.__cache_client.get_json(
-            key=cache_key)
-
     async def __get_top_sensor_record(
         self,
         device_id: str
     ) -> NestSensorData:
 
+        logger.info(f'Getting top sensor record: {device_id}')
         last_entity = await self.__sensor_repository.get_top_sensor_record(
             sensor_id=device_id)
 
         if last_entity is None:
+            logger.info(f'No sensor data found for device: {device_id}')
             return None
 
         last_record = NestSensorData.from_entity(
             data=last_entity)
+
+        logger.info(f'Last sensor record: {last_record.to_dict()}')
 
         return last_record
 
@@ -266,11 +285,13 @@ class NestService:
         self
     ) -> List[NestSensorDevice]:
 
+        logger.info(f'Getting all devices')
         entities = await self.__device_repository.get_all()
 
         devices = [NestSensorDevice.from_entity(data=entity)
                    for entity in entities]
 
+        logger.info(f'Found {len(devices)} devices')
         return devices
 
     def __get_health_status(
@@ -281,7 +302,6 @@ class NestService:
         now = DateTimeUtil.timestamp()
 
         seconds_elapsed = now - record.timestamp
-        logger.info(f'Seconds elapsed: {seconds_elapsed}')
 
         # Health status (healthy/unhealthy)
         health_status = (
@@ -289,6 +309,8 @@ class NestService:
             if seconds_elapsed >= SENSOR_UNHEALTHY_SECONDS
             else HealthStatus.Healthy
         )
+
+        logger.info(f'Seconds elapsed: {seconds_elapsed}: {health_status}')
 
         return (
             health_status,
@@ -310,8 +332,12 @@ class NestService:
             last_record = await self.__get_top_sensor_record(
                 device_id=device.device_id)
 
+            logger.info('Fetched last record successfully')
+
             health_status, seconds_elapsed = self.__get_health_status(
                 record=last_record)
+
+            logger.info(f'Health status: {health_status}: {seconds_elapsed}s')
 
             stats = SensorHealthStats(
                 status=health_status,
@@ -324,6 +350,8 @@ class NestService:
                 health=stats,
                 data=last_record)
 
+            logger.info(f'Health: {health.to_dict()}')
+
             device_health.append(health)
 
         return device_health
@@ -333,6 +361,7 @@ class NestService:
         device_id: str
     ) -> NestSensorDevice:
 
+        logger.info(f'Getting sensor: {device_id}')
         entity = await self.__device_repository.get({
             'device_id': device_id
         })
@@ -343,20 +372,28 @@ class NestService:
         device = NestSensorDevice.from_entity(
             data=entity)
 
+        logger.info(f'Found sensor: {device.to_dict()}')
+
         return device
 
     async def poll_sensor_status(
         self
     ):
+        logger.info(f'Polling sensor status')
+
         health = await self.get_sensor_info()
         results = list()
 
         for device in health:
 
+            logger.info(f'Checking sensor health: {device.device_id}')
+
             # Sensor health
             is_unhealthy = (
                 device.health.status != HealthStatus.Healthy
             )
+
+            logger.info(f'Is unhealthy: {is_unhealthy}')
 
             if not is_unhealthy:
                 continue
@@ -369,8 +406,8 @@ class NestService:
                 elapsed_seconds=device.health.seconds_elapsed)
 
             message, endpoint = self.__email_gateway.get_email_request(
-                recipient='dcl525@gmail.com',
-                subject='ESP8266 Sensor Failure',
+                recipient=ALERT_EMAIL_RECIPIENT,
+                subject=ALERT_EMAIL_SUBJECT,
                 body=body)
 
             logger.info(f'Dispatching event message: {message.to_dict()}')
@@ -406,4 +443,4 @@ class NestService:
         msg = 'Sensor Data Service\n'
         msg += '\n'
         msg += f'Cutoff Date: {cutoff_date.isoformat()}\n'
-        msg += f'Count: {deleted_count}\n'
+        msg += f'Deleted Count: {deleted_count}\n'

@@ -123,6 +123,12 @@ class NestThermostat(Serializable):
         return to_fahrenheit(
             celsius=self.thermostat_eco_cool_celsius)
 
+    @property
+    def is_starting_soon(
+        self
+    ):
+        return self.__is_starting_soon()
+
     def __init__(
         self,
         thermostat_id: str,
@@ -159,11 +165,14 @@ class NestThermostat(Serializable):
         self.cool_celsius = cool_celsius
         self.ambient_temperature_celsius = ambient_temperature_celsius
 
-    def __to_fahrenheit(
-        self,
-        celsius: float
-    ) -> float:
-        return (celsius * 9/5) + 32
+    def __is_starting_soon(
+        self
+    ):
+        return (
+            self.hvac_status == NestHvacStatus.Off
+            and self.thermostat_status == NestThermostatStatus.Online
+            and self.thermostat_mode != ThermostatMode.Off
+        )
 
     def to_dict(self) -> Dict:
         return super().to_dict() | {
@@ -171,7 +180,8 @@ class NestThermostat(Serializable):
             'thermostat_eco_heat_fahrenheit': self.thermostat_eco_heat_fahrenheit,
             'cool_fahrenheit': self.cool_fahrenheit,
             'heat_fahrenheit': self.heat_fahrenheit,
-            'ambient_temperature_fahrenheit': self.ambient_temperature_fahrenheit
+            'ambient_temperature_fahrenheit': self.ambient_temperature_fahrenheit,
+            'is_starting_soon': self.is_starting_soon
         }
 
     @classmethod
@@ -405,6 +415,7 @@ class NestCommandType(enum.StrEnum):
     SetHeat = 'set-heat'
     SetCool = 'set-cool'
     SetPowerOff = 'set-power-off'
+
 
 class SensorHealthStats(Serializable):
     def __init__(

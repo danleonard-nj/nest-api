@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict
 
 from framework.configuration import Configuration
@@ -15,6 +16,9 @@ NEST_COMMAND_SET_HEAT = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetH
 NEST_COMMAND_SET_COOL = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetCool'
 NEST_COMMAND_SET_RANGE = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange'
 NEST_COMMAND_SET_MODE = 'sdm.devices.commands.ThermostatMode.SetMode'
+
+MINIMUM_ALLOWED_TEMPERATURE = 60
+MAXIMUM_ALLOWED_TEMPERATURE = 85
 
 CommandMap = {
     NestCommandType.SetPowerOff: NEST_COMMAND_SET_MODE,
@@ -76,7 +80,7 @@ class NestCommandService:
         command_type: str,
         params: Dict
     ):
-        _, status = await self.__delegate_command(
+        status = await self.__delegate_command(
             command_type=command_type,
             params=params)
 
@@ -94,6 +98,7 @@ class NestCommandService:
         )
 
         logger.info(f'Set mode: {mode}')
+        logger.info(f'Command: {command.to_dict()}')
 
         return await self.__nest_client.execute_command(
             command=command.to_dict())
@@ -103,12 +108,17 @@ class NestCommandService:
         params: Dict
     ) -> Dict:
 
+        logger.info(f'Set heat: {params}')
         heat_degrees_fahrenheit = params.get('heat_degrees_fahrenheit')
 
-        if heat_degrees_fahrenheit > 85:
+        if heat_degrees_fahrenheit > MAXIMUM_ALLOWED_TEMPERATURE:
+            logger.info(
+                f'Heat degrees: {heat_degrees_fahrenheit}: exceeds maximum temp: {MAXIMUM_ALLOWED_TEMPERATURE}')
+
             raise Exception('Too hot!')
 
         # Set the thermostat mode to heat
+        logger.info('Setting thermostat mode to heat')
         await self.set_thermostat_mode(
             mode=ThermostatMode.Heat)
 
@@ -117,7 +127,10 @@ class NestCommandService:
             heatCelsius=to_celsius(heat_degrees_fahrenheit)
         )
 
-        logger.info(f'Set heat: {command.to_dict()}')
+        logger.info(f'Sleeping for 1 second')
+        await asyncio.sleep(1)
+
+        logger.info(f'Command: {command.to_dict()}')
         return await self.__nest_client.execute_command(
             command=command.to_dict())
 
@@ -126,13 +139,18 @@ class NestCommandService:
         params: Dict
     ) -> Dict:
 
+        logger.info(f'Set cool: {params}')
         cool_degrees_fahrenheit = params.get(
             'cool_degrees_fahrenheit')
 
-        if cool_degrees_fahrenheit < 60:
+        if cool_degrees_fahrenheit < MINIMUM_ALLOWED_TEMPERATURE:
+            logger.info(
+                f'Cool degrees: {cool_degrees_fahrenheit}: exceeds minimum temp: {MINIMUM_ALLOWED_TEMPERATURE}')
+
             raise Exception('Too cold!')
 
-        # Set the thermostat mode to heat
+        # Set the thermostat mode to cool
+        logger.info('Setting thermostat mode to cool')
         await self.set_thermostat_mode(
             mode=ThermostatMode.Cool)
 
@@ -141,7 +159,10 @@ class NestCommandService:
             coolCelsius=to_celsius(cool_degrees_fahrenheit)
         )
 
-        logger.info(f'Set cool: {command.to_dict()}')
+        logger.info(f'Sleeping for 1 second')
+        await asyncio.sleep(1)
+
+        logger.info(f'Command: {command.to_dict()}')
         return await self.__nest_client.execute_command(
             command=command.to_dict())
 
@@ -176,6 +197,7 @@ class NestCommandService:
     async def set_power_off(
         self
     ):
+        logger.info('Set power off')
         return await self.set_thermostat_mode(
             mode=ThermostatMode.Off)
 
