@@ -90,6 +90,7 @@ class NestService:
             sensor_id=sensor_request.sensor_id,
             humidity_percent=sensor_request.humidity_percent,
             degrees_celsius=sensor_request.degrees_celsius,
+            diagnostics=sensor_request.diagnostics,
             timestamp=DateTimeUtil.timestamp())
 
         logger.info(f'Capturing sensor data: {sensor_data.to_dict()}')
@@ -256,6 +257,7 @@ class NestService:
                 'degrees_celsius': entry.degrees_celsius,
                 'degrees_fahrenheit': entry.degrees_fahrenheit,
                 'humidity_percent': entry.humidity_percent,
+                'diagnostics': entry.diagnostics,
                 'timestamp': entry.get_timestamp_datetime()
             })
 

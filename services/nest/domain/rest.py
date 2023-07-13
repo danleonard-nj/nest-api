@@ -35,8 +35,19 @@ class NestSensorDataRequest(Serializable):
         degrees_celsius = data.get('degrees_celsius', 0)
         humidity_percent = data.get('humidity_percent', 0)
 
-        self.degrees_celsius = round(degrees_celsius, 2)
-        self.humidity_percent = round(humidity_percent, 2)
+        self.degrees_celsius = (
+            round(degrees_celsius, 2)
+            if degrees_celsius != 0
+            else 0
+        )
+
+        self.humidity_percent = (
+            round(humidity_percent, 2)
+            if humidity_percent != 0
+            else 0
+        )
+
+        self.diagnostics = data.get('diagnostics')
 
 
 class NestCommandRequest(Serializable):
@@ -56,4 +67,3 @@ class NestSensorLogRequest(Serializable):
         self.device_id = data.get('device_id')
         self.log_level = data.get('log_level')
         self.message = data.get('message')
-
