@@ -318,13 +318,15 @@ class NestSensorData(Serializable):
         sensor_id: str,
         degrees_celsius: float,
         humidity_percent: float,
-        timestamp: int
+        timestamp: int,
+        diagnostics: Dict = None
     ):
         self.record_id = record_id
         self.sensor_id = sensor_id
         self.degrees_celsius = round(degrees_celsius, 3)
         self.humidity_percent = round(humidity_percent, 3)
         self.timestamp = timestamp
+        self.diagnostics = diagnostics or dict()
 
         self.degrees_fahrenheit = to_fahrenheit(
             celsius=degrees_celsius)
@@ -343,7 +345,7 @@ class NestSensorData(Serializable):
         key = uuid.UUID(hashed.hexdigest())
         return str(key)
 
-    def get_timestamp_datetime(
+    def get_datetime_from_timestamp(
         self
     ) -> datetime:
 
@@ -358,7 +360,8 @@ class NestSensorData(Serializable):
             sensor_id=data.get('sensor_id'),
             degrees_celsius=data.get('degrees_celsius'),
             humidity_percent=data.get('humidity_percent'),
-            timestamp=data.get('timestamp'))
+            timestamp=data.get('timestamp'),
+            diagnostics=data.get('diagnostics'))
 
 
 class NestSensorDevice(Serializable):
