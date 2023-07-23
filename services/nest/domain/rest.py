@@ -1,5 +1,9 @@
-from typing import Dict
+from typing import Dict, Union
+
 from framework.serialization import Serializable
+
+from domain.nest import NestCommandType
+from utils.helpers import parse
 
 
 class AuthorizationHeader(Serializable):
@@ -23,6 +27,21 @@ class SaveNestAuthCredentialRequest(Serializable):
         self.client_id = data.get('client_id')
         self.client_secret = data.get('client_secret')
         self.refresh_token = data.get('refresh_token')
+
+
+class AuthorizationRequest(Serializable):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        grant_type='refresh_token',
+        **kwargs
+    ):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.grant_type = grant_type
+
+        self.__dict__.update(kwargs)
 
 
 class NestSensorDataRequest(Serializable):
@@ -50,6 +69,22 @@ class NestSensorDataRequest(Serializable):
         self.diagnostics = data.get('diagnostics')
 
 
+class NestCommandClientRequest(Serializable):
+    def __init__(
+        self,
+        command: str,
+        **kwargs: Dict
+    ):
+        self.command = command
+        self.kwargs = kwargs
+
+    def to_dict(self) -> Dict:
+        return {
+            'command': self.command,
+            'params': self.kwargs
+        }
+
+
 class NestCommandRequest(Serializable):
     def __init__(
         self,
@@ -67,3 +102,26 @@ class NestSensorLogRequest(Serializable):
         self.device_id = data.get('device_id')
         self.log_level = data.get('log_level')
         self.message = data.get('message')
+
+
+class NestCommandHandlerResponse(Serializable):
+    def __init__(
+        self,
+        command_type: Union[str, NestCommandType],
+        params: Dict,
+        status: str
+    ):
+        self.command_type = parse(
+            value=command_type,
+            enum_type=NestCommandType)
+
+        self.params = params
+        self.status = status
+
+
+class SensorDataPurgeResponse(Serializable):
+    def __init__(
+        self,
+        deleted
+    ):
+        self.deleted = deleted

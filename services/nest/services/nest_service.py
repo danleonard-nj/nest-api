@@ -12,11 +12,11 @@ from clients.email_gateway_client import EmailGatewayClient
 from clients.nest_client import NestClient
 from data.nest_repository import NestDeviceRepository, NestSensorRepository
 from domain.cache import CacheKey
-from domain.nest import (HealthStatus, NestSensorData,
-                         NestSensorDataQueryResult, NestSensorDevice,
-                         NestThermostat, SensorDataPurgeResult, SensorHealth,
+from domain.enums import HealthStatus
+from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
+                         NestSensorDevice, NestThermostat, SensorHealth,
                          SensorHealthStats, SensorPollResult)
-from domain.rest import NestSensorDataRequest
+from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
 from services.event_service import EventService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
@@ -140,7 +140,7 @@ class NestService:
             endpoint=endpoint,
             message=email_request.to_dict())
 
-        return SensorDataPurgeResult(
+        return SensorDataPurgeResponse(
             deleted=result.deleted_count)
 
     async def get_sensor_data(
@@ -155,14 +155,6 @@ class NestService:
             NestSensorDevice.from_entity(data=entity)
             for entity in device_entities
         ]
-
-        # tasks = TaskCollection()
-        # for device in devices:
-        #     tasks.add_task(self.__sensor_repository.get_by_device(
-        #         device_id=device.device_id,
-        #         start_timestamp=start_timestamp))
-
-        # await tasks.run()
 
         results = list()
 
@@ -218,7 +210,7 @@ class NestService:
         self,
         device_id: str,
         sensor_data: List[NestSensorData]
-    ) -> NestSensorDataQueryResult:
+    ) -> NestSensorDataQueryResponse:
 
         df = self.__to_dataframe(
             sensor_data=sensor_data)
@@ -229,7 +221,7 @@ class NestService:
 
         logger.info(f'Collapsed row count: {device_id}: {len(grouped)}')
 
-        return NestSensorDataQueryResult(
+        return NestSensorDataQueryResponse(
             device_id=device_id,
             data=grouped.to_dict(orient='records'))
 

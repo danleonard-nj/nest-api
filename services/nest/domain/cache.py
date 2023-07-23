@@ -13,7 +13,11 @@ def generate_uuid(data: Any):
 class CacheKey:
     @staticmethod
     def google_nest_auth_token() -> str:
-        return 'google-nest-auth-token'
+        return 'nest-google-auth-token'
+
+    @staticmethod
+    def active_thermostat_mode() -> str:
+        return 'nest-active-thermostat-mode'
 
     @staticmethod
     def nest_device_grouped_sensor_data(

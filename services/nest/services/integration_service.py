@@ -7,9 +7,8 @@ from framework.serialization import Serializable
 from clients.email_gateway_client import EmailGatewayClient
 from clients.kasa_client import KasaClient
 from data.nest_integration_repository import NestIntegrationRepository
-from domain.integration import (DeviceIntegrationConfig,
-                                IntegrationEventResult, IntegrationEventType,
-                                IntergationType, NestIntegrationEvent)
+from domain.enums import IntegrationEventResult, IntegrationEventType, IntergationDeviceType
+from domain.integration import DeviceIntegrationConfig, NestIntegrationEvent
 from domain.nest import NestSensorDevice
 from services.event_service import EventService
 from utils.helpers import parse
@@ -156,11 +155,11 @@ class NestIntegrationService:
 
         # Verify a plug integration is configured for the sensor to cycle
         # the power on and off
-        if (not config.is_supported(integration_type=IntergationType.Plug)
+        if (not config.is_supported(integration_type=IntergationDeviceType.Plug)
                 and event_type == IntegrationEventType.PowerCycle):
 
             logger.info(
-                f"Sensor with the ID '{sensor_id}' does not support the '{IntergationType.Plug}' integration type")
+                f"Sensor with the ID '{sensor_id}' does not support the '{IntergationDeviceType.Plug}' integration type")
 
             return HandleIntegrationEventResponse(
                 result=IntegrationEventResult.NotSupported,

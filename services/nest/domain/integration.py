@@ -1,12 +1,8 @@
 import enum
 from typing import Dict, List, Union
+from domain.enums import IntegrationEventType, IntergationDeviceType
 
 from utils.helpers import parse
-
-
-class IntergationType(enum.StrEnum):
-    Plug = 'plug'
-    Fan = 'fan'
 
 
 class DeviceIntegrationConfig:
@@ -28,7 +24,7 @@ class DeviceIntegrationConfig:
 
     def is_supported(
         self,
-        integration_type: Union[IntergationType, str]
+        integration_type: Union[IntergationDeviceType, str]
     ):
         for integration in self.integrations:
             device_type = integration.get('device_type')
@@ -37,18 +33,6 @@ class DeviceIntegrationConfig:
                 return True
 
         return False
-
-
-class IntegrationEventType(enum.StrEnum):
-    PowerCycle = 'power-cycle'
-
-
-class IntegrationEventResult(enum.StrEnum):
-    Success = 'success'
-    Failure = 'failure'
-    NotSupported = 'not-supported'
-    MinimumIntervalNotMet = 'minimum-interval-not-met'
-    NoOp = 'no-op'
 
 
 class NestIntegrationEvent:

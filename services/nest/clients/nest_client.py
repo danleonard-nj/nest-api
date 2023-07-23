@@ -9,6 +9,7 @@ from framework.validators.nulls import none_or_whitespace
 from httpx import AsyncClient
 
 from domain.cache import CacheKey
+from domain.rest import AuthorizationRequest
 
 logger = get_logger(__name__)
 
@@ -110,17 +111,25 @@ class NestClient:
     async def __fetch_token(
         self
     ):
-        payload = {
-            'grant_type': 'refresh_token',
-            'client_id': self.__client_id,
-            'client_secret': self.__client_secret,
-            'refresh_token': self.__refresh_token
-        }
+        # payload = {
+        #     'grant_type': 'refresh_token',
+        #     'client_id': self.__client_id,
+        #     'client_secret': self.__client_secret,
+        #     'refresh_token': self.__refresh_token
+        # }
+
+        payload = AuthorizationRequest(
+            client_id=self.__client_id,
+            client_secret=self.__client_secret,
+            grant_type='refresh_token',
+            refresh_token=self.__refresh_token)
+
+        logger.info(f'Nest auth token payload: {payload.to_dict()}')
 
         async with httpx.AsyncClient(timeout=None) as client:
             response = await client.post(
                 url=self.__token_url,
-                data=payload)
+                data=payload.to_dict())
 
             logger.info(f'Nest auth token response: {response.status_code}')
 

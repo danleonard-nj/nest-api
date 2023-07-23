@@ -1,13 +1,20 @@
-import enum
 import hashlib
 import json
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from framework.serialization import Serializable
+from domain.enums import NestCommandType, ThermostatMode
 
+from utils.helpers import parse
 from utils.utils import DateTimeUtil
+
+
+NEST_COMMAND_SET_HEAT = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat'
+NEST_COMMAND_SET_COOL = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetCool'
+NEST_COMMAND_SET_RANGE = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange'
+NEST_COMMAND_SET_MODE = 'sdm.devices.commands.ThermostatMode.SetMode'
 
 
 def to_fahrenheit(
@@ -210,7 +217,8 @@ class NestThermostat(Serializable):
         cls,
         data: Dict,
         thermostat_id: str
-    ):
+    ) -> 'NestThermostat':
+
         thermostat_name = cls.get_trait(
             data=data,
             trait=ThermostatTrait.Info,
@@ -385,7 +393,7 @@ class NestSensorDevice(Serializable):
             created_date=data.get('created_date'))
 
 
-class NestSensorDataQueryResult(Serializable):
+class NestSensorDataQueryResponse(Serializable):
     def __init__(
         self,
         device_id: str,
@@ -393,33 +401,6 @@ class NestSensorDataQueryResult(Serializable):
     ):
         self.device_id = device_id
         self.data = data
-
-
-class SensorDataPurgeResult(Serializable):
-    def __init__(
-        self,
-        deleted
-    ):
-        self.deleted = deleted
-
-
-class HealthStatus(enum.StrEnum):
-    Healthy = 'healthy'
-    Unhealthy = 'unhealthy'
-
-
-class ThermostatMode(enum.StrEnum):
-    Heat = 'HEAT'
-    Cool = 'COOL'
-    Range = 'HEATCOOL'
-    Off = 'OFF'
-
-
-class NestCommandType(enum.StrEnum):
-    SetRange = 'set-range'
-    SetHeat = 'set-heat'
-    SetCool = 'set-cool'
-    SetPowerOff = 'set-power-off'
 
 
 class SensorHealthStats(Serializable):
@@ -488,3 +469,13 @@ class NestHistoryRecord:
             params=data.get('params'),
             thermostat=data.get('thermostat'),
             timestamp=DateTimeUtil.timestamp())
+
+
+class CommandListValue(Serializable):
+    def __init__(
+        self,
+        command: str,
+        key: str
+    ):
+        self.command = command
+        self.key = key

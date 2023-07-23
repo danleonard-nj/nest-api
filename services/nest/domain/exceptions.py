@@ -22,3 +22,13 @@ class AuthTokenFailureException(Exception):
         super().__init__(
             f"Failed to fetch auth token for client '{client_name}' with status '{status_code}': {message}"
         )
+
+
+class NestThermostatTemperatureException(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class NestThermostatUnknownCommandException(Exception):
+    def __init__(self, command_type, *args: object) -> None:
+        super().__init__(f"Nest command type '{command_type}' is not known")
