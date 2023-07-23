@@ -27,3 +27,9 @@ def generate_key(items):
             default=str
         )
     )
+
+
+def parse(value, enum_type):
+    if isinstance(value, str):
+        return enum_type(value)
+    return value

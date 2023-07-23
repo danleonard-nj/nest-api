@@ -7,6 +7,8 @@ from typing import Dict, List
 
 from framework.serialization import Serializable
 
+from utils.utils import DateTimeUtil
+
 
 def to_fahrenheit(
     celsius: float
@@ -461,3 +463,28 @@ class SensorPollResult:
     ):
         self.device = device_id
         self.is_healthy = is_healthy
+
+
+class NestHistoryRecord:
+    def __init__(
+        self,
+        history_id: str,
+        command_type: str,
+        params: Dict,
+        thermostat: Dict,
+        timestamp: int
+    ):
+        self.history_id = history_id
+        self.command_type = command_type
+        self.params = params
+        self.thermostat = thermostat
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_entity(data):
+        return NestHistoryRecord(
+            history_id=data.get('history_id'),
+            command_type=data.get('command_type'),
+            params=data.get('params'),
+            thermostat=data.get('thermostat'),
+            timestamp=DateTimeUtil.timestamp())

@@ -11,11 +11,14 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from clients.email_gateway_client import EmailGatewayClient
 from clients.event_client import EventClient
 from clients.identity_client import IdentityClient
+from clients.kasa_client import KasaClient
 from clients.nest_client import NestClient
+from data.nest_integration_repository import NestIntegrationRepository
 from data.nest_repository import NestDeviceRepository, NestSensorRepository
 from domain.auth import AuthPolicy
 from services.command_service import NestCommandService
 from services.event_service import EventService
+from services.integration_service import NestIntegrationService
 from services.nest_service import NestService
 
 
@@ -63,16 +66,19 @@ def register_clients(descriptors: ServiceCollection):
     descriptors.add_singleton(EventClient)
     descriptors.add_singleton(NestClient)
     descriptors.add_singleton(EmailGatewayClient)
+    descriptors.add_singleton(KasaClient)
 
 
 def register_repositories(descriptors: ServiceCollection):
     descriptors.add_singleton(NestDeviceRepository)
     descriptors.add_singleton(NestSensorRepository)
+    descriptors.add_singleton(NestIntegrationRepository)
 
 
 def register_services(descriptors: ServiceCollection):
     descriptors.add_singleton(NestService)
     descriptors.add_singleton(NestCommandService)
+    descriptors.add_singleton(NestIntegrationService)
     descriptors.add_singleton(EventService)
 
 

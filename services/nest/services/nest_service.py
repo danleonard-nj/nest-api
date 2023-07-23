@@ -1,4 +1,3 @@
-import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
@@ -19,6 +18,7 @@ from domain.nest import (HealthStatus, NestSensorData,
                          SensorHealthStats, SensorPollResult)
 from domain.rest import NestSensorDataRequest
 from services.event_service import EventService
+from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
@@ -36,6 +36,7 @@ class NestService:
         nest_client: NestClient,
         sensor_repository: NestSensorRepository,
         device_repository: NestDeviceRepository,
+        integration_service: NestIntegrationService,
         event_service: EventService,
         email_gateway: EmailGatewayClient,
         cache_client: CacheClientAsync
