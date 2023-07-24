@@ -20,6 +20,14 @@ class CacheKey:
         return 'nest-active-thermostat-mode'
 
     @staticmethod
+    def nest_devices() -> str:
+        return 'nest-devices'
+
+    @staticmethod
+    def nest_device(sensor_id) -> str:
+        return f'nest-device-sensor-id-{sensor_id}'
+
+    @staticmethod
     def nest_device_grouped_sensor_data(
         device_id,
         key

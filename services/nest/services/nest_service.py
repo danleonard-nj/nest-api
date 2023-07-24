@@ -17,6 +17,7 @@ from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
                          NestSensorDevice, NestThermostat, SensorHealth,
                          SensorHealthStats, SensorPollResult)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
+from services.device_service import NestDeviceService
 from services.event_service import EventService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
@@ -35,8 +36,8 @@ class NestService:
         configuration: Configuration,
         nest_client: NestClient,
         sensor_repository: NestSensorRepository,
-        device_repository: NestDeviceRepository,
-        integration_service: NestIntegrationService,
+        device_service: NestDeviceService,
+        # integration_service: NestIntegrationService,
         event_service: EventService,
         email_gateway: EmailGatewayClient,
         cache_client: CacheClientAsync
@@ -50,7 +51,7 @@ class NestService:
 
         self.__nest_client = nest_client
         self.__sensor_repository = sensor_repository
-        self.__device_repository = device_repository
+        self.__device_service = device_service
         self.__event_service = event_service
         self.__email_gateway = email_gateway
         self.__cache_client = cache_client
@@ -74,7 +75,7 @@ class NestService:
     ) -> NestSensorData:
 
         logger.info(f'Logging sensor data: {sensor_request}')
-        sensor = await self.__get_sensor(
+        sensor = await self.__device_service.get_device(
             device_id=sensor_request.sensor_id)
 
         if sensor is None:
@@ -149,12 +150,7 @@ class NestService:
     ) -> List[Dict[str, List[NestSensorData]]]:
 
         logger.info(f'Get sensor data: {start_timestamp}')
-        device_entities = await self.__device_repository.get_all()
-
-        devices = [
-            NestSensorDevice.from_entity(data=entity)
-            for entity in device_entities
-        ]
+        devices = await self.__device_service.get_devices()
 
         results = list()
 
@@ -276,19 +272,6 @@ class NestService:
 
         return last_record
 
-    async def __get_all_devices(
-        self
-    ) -> List[NestSensorDevice]:
-
-        logger.info(f'Getting all devices')
-        entities = await self.__device_repository.get_all()
-
-        devices = [NestSensorDevice.from_entity(data=entity)
-                   for entity in entities]
-
-        logger.info(f'Found {len(devices)} devices')
-        return devices
-
     def __get_health_status(
         self,
         record: NestSensorData
@@ -317,7 +300,7 @@ class NestService:
     ) -> List[SensorHealth]:
 
         logger.info(f'Getting sensor info')
-        devices = await self.__get_all_devices()
+        devices = await self.__device_service.get_devices()
 
         device_health = list()
 
@@ -350,26 +333,6 @@ class NestService:
             device_health.append(health)
 
         return device_health
-
-    async def __get_sensor(
-        self,
-        device_id: str
-    ) -> NestSensorDevice:
-
-        logger.info(f'Getting sensor: {device_id}')
-        entity = await self.__device_repository.get({
-            'device_id': device_id
-        })
-
-        if entity is None:
-            return None
-
-        device = NestSensorDevice.from_entity(
-            data=entity)
-
-        logger.info(f'Found sensor: {device.to_dict()}')
-
-        return device
 
     async def poll_sensor_status(
         self
