@@ -345,6 +345,9 @@ class NestService:
 
         await tasks.run()
 
+        logger.info(f'Sorting results by device name')
+        device_health.sort(key=lambda x: x.device_name)
+
         return device_health
 
     async def poll_sensor_status(
@@ -430,6 +433,9 @@ class NestService:
 
             # Capture the poll result for the sensor
             results.append(device_poll_result)
+
+        logger.info(f'Sorting records by device ID')
+        results.sort(key=lambda x: x.device_id)
 
         return results
 
