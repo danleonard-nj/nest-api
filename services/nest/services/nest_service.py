@@ -4,13 +4,14 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 from framework.clients.cache_client import CacheClientAsync
+from framework.clients.feature_client import FeatureClientAsync
 from framework.concurrency import TaskCollection
 from framework.configuration import Configuration
 from framework.logger import get_logger
 
 from clients.email_gateway_client import EmailGatewayClient
 from clients.nest_client import NestClient
-from data.nest_repository import NestDeviceRepository, NestSensorRepository
+from data.nest_repository import NestSensorRepository
 from domain.cache import CacheKey
 from domain.enums import Feature, HealthStatus, IntegrationEventType
 from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
@@ -19,15 +20,14 @@ from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
 from services.device_service import NestDeviceService
 from services.event_service import EventService
-from framework.clients.feature_client import FeatureClientAsync
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
 
 SENSOR_UNHEALTHY_SECONDS = 90
-DEFAULT_PURGE_DAYS = 90
-ALERT_EMAIL_SUBJECT = 'ESP8266 Sensor Failure'
+DEFAULT_PURGE_DAYS = 180
+ALERT_EMAIL_SUBJECT = 'Sensor Failure'
 ALERT_EMAIL_RECIPIENT = 'dcl525@gmail.com'
 
 
@@ -307,7 +307,10 @@ class NestService:
 
         device_health = list()
 
-        for device in devices:
+        # Handle the sensor health check for a single device
+        async def handle_sensor_health_check(
+            device: NestSensorDevice
+        ) -> None:
             logger.info(f'Calculating health stats: {device.device_id}')
 
             last_record = await self.__get_top_sensor_record(
@@ -332,8 +335,15 @@ class NestService:
                 data=last_record)
 
             logger.info(f'Health: {health.to_dict()}')
-
             device_health.append(health)
+
+        # Fetch the sensor health info in parallel
+        tasks = TaskCollection(*[
+            handle_sensor_health_check(device)
+            for device in devices
+        ])
+
+        await tasks.run()
 
         return device_health
 
@@ -342,6 +352,7 @@ class NestService:
     ):
         logger.info(f'Polling sensor status')
 
+        # Get the sensor health info
         sensors = await self.get_sensor_info()
         results = list()
 
@@ -356,6 +367,7 @@ class NestService:
 
             logger.info(f'Is unhealthy: {is_unhealthy}')
 
+            # If the sensor is healthy then skip it
             if not is_unhealthy:
                 logger.info(f'Sensor is healthy: {sensor_health.device_id}')
                 continue
@@ -392,23 +404,31 @@ class NestService:
                 feature_key=Feature.NestHealthCheckEmailAlerts)
             logger.info(f'Is sensor alert enabled: {is_alert_enabled}')
 
+            # Only send the sensor health alerts if the feature is enabled
             if is_alert_enabled:
+                logger.info(
+                    f'Sending sensor alert for device: {sensor_health.device_name}')
+
+                # Get the email body content
                 body = self.__get_sensor_failure_email_message_body(
                     device=sensor_health,
                     elapsed_seconds=sensor_health.health.seconds_elapsed)
 
+                # Build the email gateway request and fetch the gateway endpoint
                 message, endpoint = self.__email_gateway.get_email_request(
                     recipient=ALERT_EMAIL_RECIPIENT,
-                    subject=ALERT_EMAIL_SUBJECT,
+                    subject=f'{ALERT_EMAIL_SUBJECT}: {sensor_health.device_name}',
                     body=body)
 
                 logger.info(f'Dispatching event message: {message.to_dict()}')
                 logger.info(f'Event endpoint: {endpoint}')
 
+                # Emit an event to service bus to send the alert email
                 await self.__event_service.dispatch_email_event(
                     endpoint=endpoint,
                     message=message.to_dict())
 
+            # Capture the poll result for the sensor
             results.append(device_poll_result)
 
         return results

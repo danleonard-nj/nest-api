@@ -90,6 +90,9 @@ class NestIntegrationEvent(Serializable):
         result: Union[IntegrationEventResult, str],
         timestamp: int
     ):
+        self.event_id = event_id
+        self.sensor_id = sensor_id
+
         self.event_type = parse(
             value=event_type,
             enum_type=IntegrationEventType)
@@ -98,8 +101,6 @@ class NestIntegrationEvent(Serializable):
             value=result,
             enum_type=IntegrationEventResult)
 
-        self.event_id = event_id
-        self.sensor_id = sensor_id
         self.timestamp = timestamp
 
     @staticmethod

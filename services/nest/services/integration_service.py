@@ -156,7 +156,8 @@ class NestIntegrationService:
                 await self.__send_intergration_event_alert(
                     sensor=device,
                     event_type=event_type,
-                    result=power_cycle_result.result)
+                    result=power_cycle_result.result,
+                    data=power_cycle_result.to_dict())
 
             return power_cycle_result
 
@@ -231,9 +232,9 @@ class NestIntegrationService:
 
         try:
             # Send the request to run the power off scene
-            power_off_status, client_response_power_off = await self.__kasa_client.run_scene(
+            power_off_status, _ = await self.__kasa_client.run_scene(
                 scene_id=power_off)
-            logger.info(f'Power off response: {client_response_power_off}')
+            logger.info(f'Power off response: {power_off_status}')
 
             # Verify power on scene ran successfully
             if power_off_status != 200:
@@ -255,9 +256,9 @@ class NestIntegrationService:
 
         try:
             # Send the request to run the power on scene
-            power_on_status, client_response_power_on = await self.__kasa_client.run_scene(
+            power_on_status, _ = await self.__kasa_client.run_scene(
                 scene_id=power_on)
-            logger.info(f'Power on response: {client_response_power_on}')
+            logger.info(f'Power on response: {power_on_status}')
 
             # Verify power off scene ran successfully
             if power_on_status != 200:
@@ -295,19 +296,20 @@ class NestIntegrationService:
         self,
         sensor: NestSensorDevice,
         event_type: IntegrationEventType,
-        result: IntegrationEventResult
+        result: IntegrationEventResult,
+        data: Dict
     ):
-        subject = f'Integration event alert: {event_type}'
+        subject = f'Integration Event For Sensor {sensor.device_name}: {event_type}'
 
-        message = f'An integration event has occurred for the sensor with the ID: {sensor.device_id}\n'
-        message += '\n'
-        message += f'Event type: {event_type}\n'
-        message += f'Event result: {result}\n'
+        # message = f'An integration event has occurred for the sensor with the ID: {sensor.device_id}\n'
+        # message += '\n'
+        # message += f'Event type: {event_type}\n'
+        # message += f'Event result: {result}\n'
 
-        email_request, endpoint = self.__email_client.get_email_request(
+        email_request, endpoint = self.__email_client.get_datatable_email_request(
             recipient=ALERT_RECIPIENT,
             subject=subject,
-            body=message)
+            data=data)
 
         logger.info(f'Sending email alert: {email_request.to_dict()}')
         logger.info(f'Endpoint: {endpoint}')
