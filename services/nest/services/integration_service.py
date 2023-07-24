@@ -148,9 +148,11 @@ class NestIntegrationService:
                 integration_config=config,
                 integration_event_type=event_type)
 
-            # If the power cycle event failed w/ an error result send an
-            # alert email
-            if power_cycle_result.result == IntegrationEventResult.Error:
+            # Only send an alert message for certain result types
+            if power_cycle_result.result in [IntegrationEventResult.Success,
+                                             IntegrationEventResult.Failure,
+                                             IntegrationEventResult.Error]:
+
                 await self.__send_intergration_event_alert(
                     sensor=device,
                     event_type=event_type,
