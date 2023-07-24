@@ -2,6 +2,7 @@ from typing import Dict, Union
 
 from framework.serialization import Serializable
 
+from domain.enums import IntegrationEventResult, IntegrationEventType
 from domain.nest import NestCommandType
 from utils.helpers import parse
 
@@ -125,3 +126,21 @@ class SensorDataPurgeResponse(Serializable):
         deleted
     ):
         self.deleted = deleted
+
+
+class HandleIntegrationEventResponse(Serializable):
+    def __init__(
+        self,
+        result: Union[str, IntegrationEventResult],
+        message: str = None,
+        integration_event_type: Union[str, IntegrationEventType] = None
+    ):
+        self.event_type = integration_event_type
+        self.message = message or str(result)
+        self.result = parse(result, IntegrationEventResult)
+
+    def to_dict(self) -> Dict:
+        return super().to_dict() | {
+            'event_type': str(self.event_type),
+            'result': str(self.result)
+        }

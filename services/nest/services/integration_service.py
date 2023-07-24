@@ -4,7 +4,6 @@ from typing import Dict, Union
 
 from framework.configuration import Configuration
 from framework.logger import get_logger
-from framework.serialization import Serializable
 from framework.validators.nulls import none_or_whitespace
 
 from clients.kasa_client import KasaClient
@@ -15,33 +14,18 @@ from domain.integration import (DeviceIntegrationConfig,
                                 DeviceIntegrationSceneMappingConfig,
                                 NestIntegrationEvent)
 from domain.nest import NestSensorDevice
+from domain.rest import HandleIntegrationEventResponse
 from services.alert_service import AlertService
 from utils.helpers import parse
 from utils.utils import DateTimeUtil
+from collections.abc import Iterable
+
 
 logger = get_logger(__name__)
 
 MINIMUM_EVENT_INTERVAL_MINUTES = 60
 ALERT_RECIPIENT = 'dcl525@gmail.com'
 POWER_CYCLE_INTERVAL_SECONDS = 5
-
-
-class HandleIntegrationEventResponse(Serializable):
-    def __init__(
-        self,
-        result: Union[str, IntegrationEventResult],
-        message: str = None,
-        integration_event_type: Union[str, IntegrationEventType] = None
-    ):
-        self.event_type = integration_event_type
-        self.message = message or str(result)
-        self.result = parse(result, IntegrationEventResult)
-
-    def to_dict(self) -> Dict:
-        return super().to_dict() | {
-            'event_type': str(self.event_type),
-            'result': str(self.result)
-        }
 
 
 class NestIntegrationService:
@@ -162,7 +146,6 @@ class NestIntegrationService:
                 await self.__send_intergration_event_alert(
                     sensor=device,
                     event_type=event_type,
-                    result=power_cycle_result.result,
                     data=power_cycle_result.to_dict())
 
             return power_cycle_result
@@ -302,10 +285,12 @@ class NestIntegrationService:
         self,
         sensor: NestSensorDevice,
         event_type: IntegrationEventType,
-        result: IntegrationEventResult,
         data: Dict
     ):
         subject = f'Integration Event For Sensor {sensor.device_name}: {event_type}'
+
+        if not isinstance(data, Iterable):
+            data = [data]
 
         await self.__alert_service.send_datatable_email(
             recipient=ALERT_RECIPIENT,
