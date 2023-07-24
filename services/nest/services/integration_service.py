@@ -299,10 +299,10 @@ class NestIntegrationService:
     ):
         subject = f'Integration event alert: {event_type}'
 
-        message = f'An integration event has occurred for the sensor with the ID: {sensor.device_id}'
+        message = f'An integration event has occurred for the sensor with the ID: {sensor.device_id}\n'
         message += '\n'
-        message += f'Event type: {event_type}'
-        message += f'Event result: {result}'
+        message += f'Event type: {event_type}\n'
+        message += f'Event result: {result}\n'
 
         email_request, endpoint = self.__email_client.get_email_request(
             recipient=ALERT_RECIPIENT,

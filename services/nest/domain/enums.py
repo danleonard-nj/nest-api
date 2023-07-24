@@ -42,3 +42,7 @@ class IntegrationEventResult(enum.StrEnum):
 class KasaIntegrationSceneType(enum.StrEnum):
     PowerOn = 'device_on'
     PowerOff = 'device_off'
+
+
+class Feature(enum.StrEnum):
+    NestHealthCheckEmailAlerts = 'nest-health-check-email-alerts'
