@@ -47,6 +47,16 @@ class NestSensorRepository(MongoRepositoryAsync):
             filter=query_filter,
             sort=[('timestamp', -1)])
 
+    async def purge_records_before_cutoff(
+        self,
+        cutoff_timestamp: int
+    ):
+        return await self.collection.delete_many({
+            'timestamp': {
+                '$lte': cutoff_timestamp
+            }
+        })
+
 
 class NestDeviceRepository(MongoRepositoryAsync):
     def __init__(

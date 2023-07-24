@@ -18,6 +18,7 @@ from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
                          NestSensorDevice, NestThermostat, SensorHealth,
                          SensorHealthStats, SensorPollResult)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
+from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from services.event_service import EventService
 from services.integration_service import NestIntegrationService
@@ -28,6 +29,7 @@ logger = get_logger(__name__)
 SENSOR_UNHEALTHY_SECONDS = 90
 DEFAULT_PURGE_DAYS = 180
 ALERT_EMAIL_SUBJECT = 'Sensor Failure'
+PURGE_EMAIL_SUBJECT = 'Sensor Data Purge'
 ALERT_EMAIL_RECIPIENT = 'dcl525@gmail.com'
 
 
@@ -39,8 +41,7 @@ class NestService:
         sensor_repository: NestSensorRepository,
         device_service: NestDeviceService,
         integration_service: NestIntegrationService,
-        event_service: EventService,
-        email_gateway: EmailGatewayClient,
+        alert_service: AlertService,
         cache_client: CacheClientAsync,
         feature_client: FeatureClientAsync
     ):
@@ -48,17 +49,14 @@ class NestService:
             'thermostat_id')
         self.__purge_days = configuration.nest.get(
             'purge_days', DEFAULT_PURGE_DAYS)
-        self.__purge_days = configuration.nest.get(
-            'purge_days', DEFAULT_PURGE_DAYS)
 
         self.__nest_client = nest_client
         self.__sensor_repository = sensor_repository
         self.__device_service = device_service
-        self.__event_service = event_service
-        self.__email_gateway = email_gateway
         self.__cache_client = cache_client
         self.__integation_service = integration_service
         self.__feature_client = feature_client
+        self.__alert_service = alert_service
 
     async def get_thermostat(
         self
@@ -86,9 +84,6 @@ class NestService:
             raise Exception(
                 f"No sensor with the ID '{sensor_request.sensor_id}' exists")
 
-        last_record = await self.__get_top_sensor_record(
-            device_id=sensor_request.sensor_id)
-
         # Create the sensor data record w/ stats
         sensor_data = NestSensorData(
             record_id=str(uuid.uuid4()),
@@ -98,13 +93,12 @@ class NestService:
             diagnostics=sensor_request.diagnostics,
             timestamp=DateTimeUtil.timestamp())
 
-        logger.info(f'Capturing sensor data: {sensor_data.to_dict()}')
-
         # Write the new sensor data
         result = await self.__sensor_repository.insert(
             document=sensor_data.to_dict())
 
-        logger.info(f'Success: {result.acknowledged}')
+        logger.info(
+            f'Capture sensor data for sensor: {sensor.device_name}: {result.acknowledged}')
 
         return sensor_data
 
@@ -121,28 +115,20 @@ class NestService:
         cutoff_timestamp = int(cutoff_date.timestamp())
         logger.info(f'Cutoff timestamp: {cutoff_timestamp}')
 
-        result = await self.__sensor_repository.collection.delete_many({
-            'timestamp': {
-                '$lte': cutoff_timestamp
-            }
-        })
+        result = await self.__sensor_repository.purge_records_before_cutoff(
+            cutoff_timestamp=cutoff_timestamp)
 
         logger.info(f'Deleted: {result.deleted_count}')
 
-        email_request, endpoint = self.__email_gateway.get_email_request(
-            recipient='dcl525@gmail.com',
-            subject='Sensor Data Service',
-            body=self.__get_email_message_body(
-                cutoff_date=cutoff_date,
-                deleted_count=result.deleted_count
-            ))
+        alert_body = self.__get_email_message_body(
+            cutoff_date=cutoff_date,
+            deleted_count=result.deleted_count)
 
-        logger.info(
-            f'Dispatching email event message: {email_request.to_dict()}')
-
-        await self.__event_service.dispatch_email_event(
-            endpoint=endpoint,
-            message=email_request.to_dict())
+        # Send an alert email to notify the purge ran
+        await self.__alert_service.send_alert(
+            recipient=ALERT_EMAIL_RECIPIENT,
+            subject=PURGE_EMAIL_SUBJECT,
+            body=alert_body)
 
         return SensorDataPurgeResponse(
             deleted=result.deleted_count)
@@ -409,27 +395,16 @@ class NestService:
 
             # Only send the sensor health alerts if the feature is enabled
             if is_alert_enabled:
-                logger.info(
-                    f'Sending sensor alert for device: {sensor_health.device_name}')
 
                 # Get the email body content
                 body = self.__get_sensor_failure_email_message_body(
                     device=sensor_health,
                     elapsed_seconds=sensor_health.health.seconds_elapsed)
 
-                # Build the email gateway request and fetch the gateway endpoint
-                message, endpoint = self.__email_gateway.get_email_request(
+                await self.__alert_service.send_alert(
                     recipient=ALERT_EMAIL_RECIPIENT,
                     subject=f'{ALERT_EMAIL_SUBJECT}: {sensor_health.device_name}',
                     body=body)
-
-                logger.info(f'Dispatching event message: {message.to_dict()}')
-                logger.info(f'Event endpoint: {endpoint}')
-
-                # Emit an event to service bus to send the alert email
-                await self.__event_service.dispatch_email_event(
-                    endpoint=endpoint,
-                    message=message.to_dict())
 
             # Capture the poll result for the sensor
             results.append(device_poll_result)

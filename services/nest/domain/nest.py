@@ -443,7 +443,7 @@ class SensorPollResult(Serializable):
         is_healthy: bool,
         integration: Dict = None
     ):
-        self.device = device_id
+        self.device_id = device_id
         self.is_healthy = is_healthy
         self.integration = integration or dict()
 

@@ -7,7 +7,6 @@ from framework.logger import get_logger
 from framework.serialization import Serializable
 from framework.validators.nulls import none_or_whitespace
 
-from clients.email_gateway_client import EmailGatewayClient
 from clients.kasa_client import KasaClient
 from data.nest_integration_repository import NestIntegrationRepository
 from domain.enums import (IntegrationEventResult, IntegrationEventType,
@@ -16,7 +15,7 @@ from domain.integration import (DeviceIntegrationConfig,
                                 DeviceIntegrationSceneMappingConfig,
                                 NestIntegrationEvent)
 from domain.nest import NestSensorDevice
-from services.event_service import EventService
+from services.alert_service import AlertService
 from utils.helpers import parse
 from utils.utils import DateTimeUtil
 
@@ -53,15 +52,13 @@ class NestIntegrationService:
         self,
         configuration: Configuration,
         integration_repository: NestIntegrationRepository,
-        email_client: EmailGatewayClient,
-        event_service: EventService,
-        kasa_client: KasaClient
+        kasa_client: KasaClient,
+        alert_service: AlertService
     ):
         self.__configuration = configuration
         self.__integration_repository = integration_repository
-        self.__email_client = email_client
-        self.__event_service = event_service
         self.__kasa_client = kasa_client
+        self.__alert_service = alert_service
 
         self.__integrations = None
 
@@ -306,17 +303,10 @@ class NestIntegrationService:
         # message += f'Event type: {event_type}\n'
         # message += f'Event result: {result}\n'
 
-        email_request, endpoint = self.__email_client.get_datatable_email_request(
+        await self.__alert_service.send_datatable_email(
             recipient=ALERT_RECIPIENT,
             subject=subject,
             data=data)
-
-        logger.info(f'Sending email alert: {email_request.to_dict()}')
-        logger.info(f'Endpoint: {endpoint}')
-
-        await self.__event_service.dispatch_email_event(
-            endpoint=endpoint,
-            message=email_request.to_dict())
 
     def __load_integration_lookup(
         self,

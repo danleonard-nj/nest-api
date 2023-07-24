@@ -16,6 +16,7 @@ from clients.nest_client import NestClient
 from data.nest_integration_repository import NestIntegrationRepository
 from data.nest_repository import NestDeviceRepository, NestSensorRepository
 from domain.auth import AuthPolicy
+from services.alert_service import AlertService
 from services.command_service import NestCommandService
 from services.device_service import NestDeviceService
 from services.event_service import EventService
@@ -82,6 +83,7 @@ def register_services(descriptors: ServiceCollection):
     descriptors.add_singleton(NestIntegrationService)
     descriptors.add_singleton(NestDeviceService)
     descriptors.add_singleton(EventService)
+    descriptors.add_singleton(AlertService)
 
 
 def register_providers(descriptors: ServiceCollection):
