@@ -67,19 +67,19 @@ def register_clients(descriptors: ServiceCollection):
     descriptors.add_singleton(EventClient)
     descriptors.add_singleton(NestClient)
     descriptors.add_singleton(EmailGatewayClient)
-    # descriptors.add_singleton(KasaClient)
+    descriptors.add_singleton(KasaClient)
 
 
 def register_repositories(descriptors: ServiceCollection):
     descriptors.add_singleton(NestDeviceRepository)
     descriptors.add_singleton(NestSensorRepository)
-    # descriptors.add_singleton(NestIntegrationRepository)
+    descriptors.add_singleton(NestIntegrationRepository)
 
 
 def register_services(descriptors: ServiceCollection):
     descriptors.add_singleton(NestService)
     descriptors.add_singleton(NestCommandService)
-    # descriptors.add_singleton(NestIntegrationService)
+    descriptors.add_singleton(NestIntegrationService)
     descriptors.add_singleton(NestDeviceService)
     descriptors.add_singleton(EventService)
 

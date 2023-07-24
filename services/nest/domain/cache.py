@@ -3,6 +3,8 @@ import json
 from typing import Any
 import uuid
 
+from utils.utils import KeyUtils
+
 
 def generate_uuid(data: Any):
     parsed = json.dumps(data, default=str)
@@ -26,6 +28,11 @@ class CacheKey:
     @staticmethod
     def nest_device(sensor_id) -> str:
         return f'nest-device-sensor-id-{sensor_id}'
+
+    @staticmethod
+    def auth_token(**kwargs) -> str:
+        key = KeyUtils.create_uuid(**kwargs)
+        return f'nest-auth-token-{key}'
 
     @staticmethod
     def nest_device_grouped_sensor_data(

@@ -14,7 +14,7 @@ class NestIntegrationRepository(MongoRepositoryAsync):
             database='Nest',
             collection='Integration')
 
-    async def get_latest_integation_event_by_sensor_id(
+    async def get_latest_integation_event_by_sensor(
         self,
         sensor_id: str
     ) -> Dict[str, Any]:

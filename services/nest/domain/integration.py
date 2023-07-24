@@ -1,11 +1,13 @@
-import enum
 from typing import Dict, List, Union
-from domain.enums import IntegrationEventType, IntergationDeviceType, KasaIntegrationSceneType
 
+from framework.serialization import Serializable
+
+from domain.enums import (IntegrationEventResult, IntegrationEventType, IntergationDeviceType,
+                          KasaIntegrationSceneType)
 from utils.helpers import parse
 
 
-class DeviceIntegrationSceneMappingConfig:
+class DeviceIntegrationSceneMappingConfig(Serializable):
     def __init__(
         self,
         device_type: Union[IntergationDeviceType, str],
@@ -22,7 +24,7 @@ class DeviceIntegrationSceneMappingConfig:
     ):
         return DeviceIntegrationSceneMappingConfig(
             device_type=data.get('device_type'),
-            scene_id=data.get('scene_id'))
+            scenes=data.get('scenes'))
 
     def get_scene(
         self,
@@ -79,13 +81,13 @@ class DeviceIntegrationConfig:
         return None
 
 
-class NestIntegrationEvent:
+class NestIntegrationEvent(Serializable):
     def __init__(
         self,
         event_id: str,
         event_type: Union[IntegrationEventType, str],
         sensor_id: str,
-        result: str,
+        result: Union[IntegrationEventResult, str],
         timestamp: int
     ):
         self.event_type = parse(
@@ -94,7 +96,7 @@ class NestIntegrationEvent:
 
         self.result = parse(
             value=result,
-            enum_type=IntegrationEventType)
+            enum_type=IntegrationEventResult)
 
         self.event_id = event_id
         self.sensor_id = sensor_id

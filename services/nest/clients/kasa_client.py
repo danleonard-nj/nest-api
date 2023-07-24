@@ -24,7 +24,7 @@ class KasaClient:
         self
     ):
         token = await self.__identity_client.get_token(
-            client_name='kasa-api',
+            client_name='nest-api',
             scope=ClientScope.KasaApi)
 
         return {
@@ -40,10 +40,16 @@ class KasaClient:
         headers = await self.__get_headers()
         logger.info(f'Headers: {headers}')
 
+        endpoint = f'{self.__base_url}/scene/{scene_id}/run'
+        logger.info(f'Endpoint: {endpoint}')
+
         response = await self.__http_client.post(
-            url=f'{self.__base_url}/scene/{scene_id}/run',
+            url=endpoint,
             headers=headers)
 
         logger.info(f'Response status: {response.status_code}')
 
-        return response.json()
+        return (
+            response.satatus_code,
+            response.json()
+        )

@@ -436,14 +436,16 @@ class SensorHealth(Serializable):
         }
 
 
-class SensorPollResult:
+class SensorPollResult(Serializable):
     def __init__(
         self,
         device_id: str,
-        is_healthy: bool
+        is_healthy: bool,
+        integration: Dict = None
     ):
         self.device = device_id
         self.is_healthy = is_healthy
+        self.integration = integration or dict()
 
 
 class NestHistoryRecord:

@@ -12,7 +12,7 @@ from clients.email_gateway_client import EmailGatewayClient
 from clients.nest_client import NestClient
 from data.nest_repository import NestDeviceRepository, NestSensorRepository
 from domain.cache import CacheKey
-from domain.enums import HealthStatus
+from domain.enums import HealthStatus, IntegrationEventType
 from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
                          NestSensorDevice, NestThermostat, SensorHealth,
                          SensorHealthStats, SensorPollResult)
@@ -37,7 +37,7 @@ class NestService:
         nest_client: NestClient,
         sensor_repository: NestSensorRepository,
         device_service: NestDeviceService,
-        # integration_service: NestIntegrationService,
+        integration_service: NestIntegrationService,
         event_service: EventService,
         email_gateway: EmailGatewayClient,
         cache_client: CacheClientAsync
@@ -55,6 +55,7 @@ class NestService:
         self.__event_service = event_service
         self.__email_gateway = email_gateway
         self.__cache_client = cache_client
+        self.__integation_service = integration_service
 
     async def get_thermostat(
         self
@@ -342,13 +343,13 @@ class NestService:
         health = await self.get_sensor_info()
         results = list()
 
-        for device in health:
+        for device_health in health:
 
-            logger.info(f'Checking sensor health: {device.device_id}')
+            logger.info(f'Checking sensor health: {device_health.device_id}')
 
             # Sensor health
             is_unhealthy = (
-                device.health.status != HealthStatus.Healthy
+                device_health.health.status != HealthStatus.Healthy
             )
 
             logger.info(f'Is unhealthy: {is_unhealthy}')
@@ -356,12 +357,33 @@ class NestService:
             if not is_unhealthy:
                 continue
 
+            device_poll_result = SensorPollResult(
+                device_id=device_health.device_id,
+                is_healthy=not is_unhealthy)
+
+            logger.info('Checking for sensor power cycle integration')
+            if self.__integation_service.is_device_integration_supported(
+                    device_id=device_health.device_id):
+
+                # Get device from cache/db
+                device = await self.__device_service.get_device(
+                    device_id=device_health.device_id)
+
+                logger.info(
+                    f'Attempting to power cycle device: {device.device_id}')
+
+                event_result = await self.__integation_service.handle_integration_event(
+                    device=device,
+                    event_type=IntegrationEventType.PowerCycle)
+
+                device_poll_result.integration = event_result.to_dict()
+
             logger.info(
-                f'Sending unhealthy alert for device: {device.device_id}')
+                f'Sending unhealthy alert for device: {device_health.device_id}')
 
             body = self.__get_sensor_failure_email_message_body(
-                device=device,
-                elapsed_seconds=device.health.seconds_elapsed)
+                device=device_health,
+                elapsed_seconds=device_health.health.seconds_elapsed)
 
             message, endpoint = self.__email_gateway.get_email_request(
                 recipient=ALERT_EMAIL_RECIPIENT,
@@ -375,11 +397,7 @@ class NestService:
                 endpoint=endpoint,
                 message=message.to_dict())
 
-            result = SensorPollResult(
-                device_id=device.device_id,
-                is_healthy=not is_unhealthy)
-
-            results.append(result)
+            results.append(device_poll_result)
 
         return results
 

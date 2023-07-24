@@ -30,7 +30,7 @@ class EventService:
         logger.info(f'Emit email notification event: {endpoint}')
 
         token = await self.__identity_client.get_token(
-            client_name='kube-tools-api',
+            client_name='nest-api',
             scope=ClientScope.EmailGatewayApi)
 
         event = SendEmailEvent(
