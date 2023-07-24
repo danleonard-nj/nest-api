@@ -35,3 +35,9 @@ class IntegrationEventResult(enum.StrEnum):
     NotSupported = 'not-supported'
     MinimumIntervalNotMet = 'minimum-interval-not-met'
     NoOp = 'no-op'
+    InvalidConfiguration = 'invalid-configuration'
+
+
+class KasaIntegrationSceneType(enum.StrEnum):
+    PowerOn = 'on'
+    PowerOff = 'off'

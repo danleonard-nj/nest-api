@@ -1,8 +1,39 @@
 import enum
 from typing import Dict, List, Union
-from domain.enums import IntegrationEventType, IntergationDeviceType
+from domain.enums import IntegrationEventType, IntergationDeviceType, KasaIntegrationSceneType
 
 from utils.helpers import parse
+
+
+class DeviceIntegrationSceneMappingConfig:
+    def __init__(
+        self,
+        device_type: Union[IntergationDeviceType, str],
+        scenes: Dict
+    ):
+        self.scenes = scenes
+        self.device_type = parse(
+            value=device_type,
+            enum_type=IntergationDeviceType)
+
+    @staticmethod
+    def from_json_object(
+        data: Dict
+    ):
+        return DeviceIntegrationSceneMappingConfig(
+            device_type=data.get('device_type'),
+            scene_id=data.get('scene_id'))
+
+    def get_scene(
+        self,
+        scene_type: Union[KasaIntegrationSceneType, str]
+    ) -> Union[str, None]:
+
+        scene_type = parse(
+            value=scene_type,
+            enum_type=KasaIntegrationSceneType)
+
+        return self.scenes.get(scene_type)
 
 
 class DeviceIntegrationConfig:
@@ -33,6 +64,19 @@ class DeviceIntegrationConfig:
                 return True
 
         return False
+
+    def get_integration_data(
+        self,
+        integration_device_type: Union[IntergationDeviceType, str]
+    ) -> Union[Dict, None]:
+
+        for integration in self.integrations:
+            device_type = integration.get('device_type')
+
+            if device_type == str(integration_device_type):
+                return integration
+
+        return None
 
 
 class NestIntegrationEvent:

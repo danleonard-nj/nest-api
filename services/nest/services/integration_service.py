@@ -7,9 +7,10 @@ from framework.serialization import Serializable
 from clients.email_gateway_client import EmailGatewayClient
 from clients.kasa_client import KasaClient
 from data.nest_integration_repository import NestIntegrationRepository
-from domain.enums import IntegrationEventResult, IntegrationEventType, IntergationDeviceType
-from domain.integration import DeviceIntegrationConfig, NestIntegrationEvent
+from domain.enums import IntegrationEventResult, IntegrationEventType, IntergationDeviceType, KasaIntegrationSceneType
+from domain.integration import DeviceIntegrationConfig, DeviceIntegrationSceneMappingConfig, NestIntegrationEvent
 from domain.nest import NestSensorDevice
+from framework.validators.nulls import none_or_whitespace
 from services.event_service import EventService
 from utils.helpers import parse
 from utils.utils import DateTimeUtil
@@ -109,21 +110,28 @@ class NestIntegrationService:
 
         config = self.__integrations.get(sensor_id)
 
+        # No integration config is defined for the sensor
         if config is None:
             raise Exception(
                 f"No integration config is defined for sensor with the ID '{sensor_id}'")
 
+        # Get the latest integration event for the sensor
         latest_event_entity = await self.__integration_repository.get_latest_integation_event_by_sensor_id(
             sensor_id=sensor_id)
 
-        # Verify the minimum interval has passed since the last event
+        # If we have a stored integration event for the sensor
+        # verify the minimum interval has passed since the last
+        # event occured
         if latest_event_entity is not None:
             latest_event = NestIntegrationEvent.from_entity(
                 data=latest_event_entity)
 
             now = DateTimeUtil.timestamp()
-            if (now - latest_event.timestamp
-                    < MINIMUM_EVENT_INTERVAL_MINUTES * 60):
+
+            # If the minimum interval hasn't been met since the
+            # last integration event
+            if (now - latest_event.timestamp <
+                    (MINIMUM_EVENT_INTERVAL_MINUTES * 60)):
 
                 logger.info(
                     f"Minimum interval of '{MINIMUM_EVENT_INTERVAL_MINUTES}' minutes has not passed since the last event")
@@ -133,30 +141,30 @@ class NestIntegrationService:
                     message='The minimum interval has not passed since the last event')
 
         if event_type == IntegrationEventType.PowerCycle:
-            return await self.cycle_sensor(
+            return await self.handle_power_cycle_integration_event(
                 sensor=sensor,
-                config=config,
-                event_type=event_type)
+                integration_config=config,
+                integration_event_type=event_type)
 
         else:
             return HandleIntegrationEventResponse(
                 result=IntegrationEventResult.NoOp,
                 message=f'No action was taken for the event type: {event_type}')
 
-    async def cycle_sensor(
+    async def handle_power_cycle_integration_event(
         self,
         sensor: NestSensorDevice,
-        config: DeviceIntegrationConfig,
-        event_type: Union[IntegrationEventType, str]
+        integration_config: DeviceIntegrationConfig,
+        integration_event_type: Union[IntegrationEventType, str]
     ):
         sensor_id = sensor.device_id
+        integration_event_type = parse(
+            integration_event_type, IntegrationEventType)
 
-        event_type = parse(event_type, IntegrationEventType)
-
-        # Verify a plug integration is configured for the sensor to cycle
-        # the power on and off
-        if (not config.is_supported(integration_type=IntergationDeviceType.Plug)
-                and event_type == IntegrationEventType.PowerCycle):
+        # Verify this type of integration event is configured
+        # for this sensor
+        if not integration_config.is_supported(
+                integration_type=IntergationDeviceType.Plug):
 
             logger.info(
                 f"Sensor with the ID '{sensor_id}' does not support the '{IntergationDeviceType.Plug}' integration type")
@@ -164,3 +172,38 @@ class NestIntegrationService:
             return HandleIntegrationEventResponse(
                 result=IntegrationEventResult.NotSupported,
                 message='The sensor does not support the integration type')
+
+        integration = integration_config.get_integration_data(
+            integration_device_type=IntergationDeviceType.Plug)
+
+        mapping = DeviceIntegrationSceneMappingConfig.from_json_object(
+            data=integration)
+
+        logger.info(f'Integration mapping: {mapping.to_json_object()}')
+
+        # Get the scene ID for the power off phase
+        logger.info(f'Getting scene for power off phase')
+        power_off = mapping.get_scene(
+            scene_type=KasaIntegrationSceneType.PowerOff)
+
+        # Verify a scene is defined for the power off phase
+        if none_or_whitespace(power_off):
+            logger.info(f'No scene ID was found for power off phase')
+
+            return HandleIntegrationEventResponse(
+                result=IntegrationEventResult.InvalidConfiguration,
+                message='No scene ID was found for power off phase')
+
+        logger.info(f'Power off scene ID: {power_off}')
+
+        logger.info(f'Getting scene for power on phase')
+        power_on = mapping.get_scene(
+            scene_type=KasaIntegrationSceneType.PowerOn)
+
+        # Verify a scene is defined for the power on phase
+        if none_or_whitespace(power_on):
+            logger.info(f'No scene ID was found for power on phase')
+
+            return HandleIntegrationEventResponse(
+                result=IntegrationEventResult.InvalidConfiguration,
+                message='No scene ID was found for power on phase')
