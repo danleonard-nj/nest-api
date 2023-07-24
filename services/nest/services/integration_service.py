@@ -37,6 +37,12 @@ class HandleIntegrationEventResponse(Serializable):
         self.message = message or str(result)
         self.result = parse(result, IntegrationEventResult)
 
+    def to_dict(self) -> Dict:
+        return super().to_dict() | {
+            'event_type': str(self.event_type),
+            'result': str(self.result)
+        }
+
 
 class NestIntegrationService:
     @property
@@ -149,6 +155,9 @@ class NestIntegrationService:
             if power_cycle_result.result in [IntegrationEventResult.Success,
                                              IntegrationEventResult.Failure,
                                              IntegrationEventResult.Error]:
+
+                logger.info(
+                    f'Sending alert for power cycle result: {power_cycle_result.result}')
 
                 await self.__send_intergration_event_alert(
                     sensor=device,
@@ -297,11 +306,6 @@ class NestIntegrationService:
         data: Dict
     ):
         subject = f'Integration Event For Sensor {sensor.device_name}: {event_type}'
-
-        # message = f'An integration event has occurred for the sensor with the ID: {sensor.device_id}\n'
-        # message += '\n'
-        # message += f'Event type: {event_type}\n'
-        # message += f'Event result: {result}\n'
 
         await self.__alert_service.send_datatable_email(
             recipient=ALERT_RECIPIENT,
