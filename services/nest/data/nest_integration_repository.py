@@ -14,6 +14,25 @@ class NestIntegrationRepository(MongoRepositoryAsync):
             database='Nest',
             collection='Integration')
 
+    async def get_integration_events(
+        self,
+        start_timestamp: int,
+        end_timestamp: int,
+        max_results=None
+    ):
+        query_filter = {
+            'timestamp': {
+                '$gt': start_timestamp,
+                '$lte': end_timestamp
+            }
+        }
+
+        results = await self.collection.find(
+            query_filter).to_list(
+                length=None)
+
+        return results
+
     async def get_latest_integation_event_by_sensor(
         self,
         sensor_id: str

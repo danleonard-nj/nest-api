@@ -50,6 +50,6 @@ class KasaClient:
         logger.info(f'Response status: {response.status_code}')
 
         return (
-            response.satatus_code,
+            response.status_code,
             response.json()
         )

@@ -7,6 +7,7 @@ from quart import Quart
 from routes.nest import nest_bp
 from routes.command import command_bp
 from routes.sensor import sensor_bp
+from routes.integration import integration_bp
 from routes.health import health_bp
 from utils.provider import ContainerProvider
 
@@ -23,6 +24,7 @@ app.register_blueprint(health_bp)
 app.register_blueprint(nest_bp)
 app.register_blueprint(command_bp)
 app.register_blueprint(sensor_bp)
+app.register_blueprint(integration_bp)
 
 
 @app.before_serving
