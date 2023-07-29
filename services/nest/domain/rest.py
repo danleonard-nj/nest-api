@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Union
 
 from framework.serialization import Serializable
@@ -79,7 +80,9 @@ class NestCommandClientRequest(Serializable):
         self.command = command
         self.kwargs = kwargs
 
-    def to_dict(self) -> Dict:
+    def to_dict(
+        self
+    ) -> Dict:
         return {
             'command': self.command,
             'params': self.kwargs
@@ -139,8 +142,44 @@ class HandleIntegrationEventResponse(Serializable):
         self.message = message or str(result)
         self.result = parse(result, IntegrationEventResult)
 
-    def to_dict(self) -> Dict:
+    def to_dict(
+        self
+    ) -> Dict:
         return super().to_dict() | {
             'event_type': str(self.event_type),
             'result': str(self.result)
         }
+
+
+class IntegrationEventResponse(Serializable):
+    def __init__(
+        self,
+        event_id: str,
+        device_id: str,
+        device_name: str,
+        event_type: str,
+        result: str,
+        timestamp: int
+    ):
+        event_date = (
+            datetime.fromtimestamp(timestamp).isoformat()
+        )
+
+        self.event_id = event_id
+        self.device_id = device_id
+        self.device_name = device_name
+        self.event_type = event_type
+        self.event_date = event_date
+        self.result = result
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_dict(data):
+        return IntegrationEventResponse(
+            event_id=data.get('event_id'),
+            device_id=data.get('sensor_id'),
+            device_name=data.get('device_name'),
+            event_type=data.get('event_type'),
+            result=data.get('result'),
+            timestamp=data.get('timestamp')
+        )

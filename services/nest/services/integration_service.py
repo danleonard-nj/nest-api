@@ -1,9 +1,12 @@
 import asyncio
 import uuid
+from collections.abc import Iterable
 from typing import Dict, Union
 
+import pandas as pd
 from framework.configuration import Configuration
 from framework.logger import get_logger
+from framework.serialization import Serializable
 from framework.validators.nulls import none_or_whitespace
 
 from clients.kasa_client import KasaClient
@@ -14,12 +17,12 @@ from domain.integration import (DeviceIntegrationConfig,
                                 DeviceIntegrationSceneMappingConfig,
                                 NestIntegrationEvent)
 from domain.nest import NestSensorDevice
-from domain.rest import HandleIntegrationEventResponse
+from domain.rest import (HandleIntegrationEventResponse,
+                         IntegrationEventResponse)
 from services.alert_service import AlertService
+from services.device_service import NestDeviceService
 from utils.helpers import parse
 from utils.utils import DateTimeUtil
-from collections.abc import Iterable
-
 
 logger = get_logger(__name__)
 
@@ -42,11 +45,13 @@ class NestIntegrationService:
         self,
         configuration: Configuration,
         integration_repository: NestIntegrationRepository,
+        device_service: NestDeviceService,
         kasa_client: KasaClient,
         alert_service: AlertService
     ):
         self.__configuration = configuration
         self.__integration_repository = integration_repository
+        self.__device_service = device_service
         self.__kasa_client = kasa_client
         self.__alert_service = alert_service
 
@@ -64,16 +69,18 @@ class NestIntegrationService:
         end_timestamp: int = None,
         max_results: int = None
     ):
-        end_timestamp = (
-            end_timestamp or DateTimeUtil.timestamp()
-        )
-
-        start_timestamp = int(start_timestamp)
-        end_timestamp = int(end_timestamp)
 
         logger.info(
             f'Getting integration events: {start_timestamp} to {end_timestamp}')
 
+        start_timestamp = int(start_timestamp)
+        end_timestamp = int(end_timestamp or DateTimeUtil.timestamp())
+
+        # Fetch all devices to map onto the integration events
+        logger.info('Fetching devicesc')
+        devices = await self.__device_service.get_devices()
+
+        # Get the integration events within the given date range
         entities = await self.__integration_repository.get_integration_events(
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
@@ -84,7 +91,35 @@ class NestIntegrationService:
         events = [NestIntegrationEvent.from_entity(data=entity)
                   for entity in entities]
 
-        return events
+        df = self.__merge_devices_on_events(
+            devices=devices,
+            events=events)
+
+        df = df.sort_values(
+            by='timestamp',
+            ascending=False)
+
+        results = df.to_dict(orient='records')
+
+        return [
+            IntegrationEventResponse.from_dict(data=result)
+            for result in results
+        ]
+
+    def __merge_devices_on_events(
+        self,
+        devices: list[NestSensorDevice],
+        events: list[NestIntegrationEvent]
+    ):
+        devices_df = pd.DataFrame([x.to_dict() for x in devices])
+        devices_df = devices_df[['device_id', 'device_name']]
+        events_df = pd.DataFrame([x.to_dict() for x in events])
+
+        return events_df.merge(
+            right=devices_df,
+            left_on='sensor_id',
+            right_on='device_id',
+            how='left')
 
     async def handle_integration_event(
         self,

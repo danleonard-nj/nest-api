@@ -2,8 +2,8 @@ from typing import Dict, List, Union
 
 from framework.serialization import Serializable
 
-from domain.enums import (IntegrationEventResult, IntegrationEventType, IntergationDeviceType,
-                          KasaIntegrationSceneType)
+from domain.enums import (IntegrationEventResult, IntegrationEventType,
+                          IntergationDeviceType, KasaIntegrationSceneType)
 from utils.helpers import parse
 
 
