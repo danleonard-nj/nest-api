@@ -324,7 +324,7 @@ class NestIntegrationService:
     ):
         subject = f'Integration Event For Sensor {sensor.device_name}: {event_type}'
 
-        if not isinstance(data, Iterable):
+        if not isinstance(data, list):
             data = [data]
 
         await self.__alert_service.send_datatable_email(
