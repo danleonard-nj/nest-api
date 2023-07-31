@@ -1,4 +1,5 @@
-from typing import Dict
+from collections.abc import Iterable
+from typing import Dict, List
 
 from framework.logger import get_logger
 
@@ -40,8 +41,12 @@ class AlertService:
         self,
         recipient: str,
         subject: str,
-        data: Dict
+        data: List[Dict]
     ) -> None:
+
+        if not isinstance(data, Iterable):
+            data = [data]
+
         email_request, endpoint = self.__email_client.get_datatable_email_request(
             recipient=recipient,
             subject=subject,
