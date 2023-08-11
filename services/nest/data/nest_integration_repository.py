@@ -18,6 +18,7 @@ class NestIntegrationRepository(MongoRepositoryAsync):
         self,
         start_timestamp: int,
         end_timestamp: int,
+        sensor_id: str = None,
         max_results=None
     ):
         query_filter = {
@@ -26,6 +27,9 @@ class NestIntegrationRepository(MongoRepositoryAsync):
                 '$lte': end_timestamp
             }
         }
+
+        if sensor_id is not None:
+            query_filter['sensor_id'] = sensor_id
 
         results = await self.collection.find(
             query_filter).to_list(

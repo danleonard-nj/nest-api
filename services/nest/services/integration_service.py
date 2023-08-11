@@ -67,6 +67,7 @@ class NestIntegrationService:
         self,
         start_timestamp: int,
         end_timestamp: int = None,
+        sensor_id: str = None,
         max_results: int = None
     ):
 
@@ -84,12 +85,19 @@ class NestIntegrationService:
         entities = await self.__integration_repository.get_integration_events(
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
+            sensor_id=sensor_id,
             max_results=max_results)
 
         logger.info(f'Integration events fetched: {len(entities)}')
 
         events = [NestIntegrationEvent.from_entity(data=entity)
                   for entity in entities]
+
+        if not any(events):
+            logger.info(
+                f'No events found in range: {start_timestamp} to {end_timestamp}')
+
+            return list()
 
         df = self.__merge_devices_on_events(
             devices=devices,
