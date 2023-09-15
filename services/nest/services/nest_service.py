@@ -433,3 +433,5 @@ class NestService:
         msg += '\n'
         msg += f'Cutoff Date: {cutoff_date.isoformat()}\n'
         msg += f'Deleted Count: {deleted_count}\n'
+        
+        return msg
