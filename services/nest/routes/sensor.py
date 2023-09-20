@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from framework.di.service_provider import ServiceProvider
 from framework.logger.providers import get_logger
 from quart import request
+from zmq import device
 
 from domain.auth import AuthPolicy
 from domain.rest import NestSensorDataRequest, NestSensorLogRequest
@@ -26,19 +27,6 @@ async def post_sensor_purge(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
 
     return await service.purge_sensor_data()
-
-
-@sensor_bp.with_key_auth('/api/sensor/log', methods=['POST'], key_name=API_KEY_NAME)
-async def post_sensor_log(container: ServiceProvider):
-    service: NestService = container.resolve(NestService)
-
-    body = await request.get_json()
-
-    req = NestSensorLogRequest(
-        data=body)
-
-    return await service.log_message(
-        req=req)
 
 
 @sensor_bp.with_key_auth('/api/sensor', methods=['POST'], key_name=API_KEY_NAME)
@@ -80,28 +68,12 @@ async def get_sensor_data(container: ServiceProvider):
 async def get_sensor_id(container: ServiceProvider, sensor_id: str):
     service: NestService = container.resolve(NestService)
 
-    start_timestamp = request.args.get(
-        'start_timestamp',
-        default_start_timestamp())
+    hours_back = request.args.get(
+        'hours_back', 1)
 
-    params = request.args.to_dict(flat=False)
-    devices = params.get('device_id', [])
-
-    return await service.get_sensor_data(
-        start_timestamp=start_timestamp,
-        device_ids=devices)
-
-
-# @sensor_bp.configure('/api/sensor/grouped', methods=['GET'], auth_scheme=AuthPolicy.Default)
-# async def get_grouped_sensor_data(container: ServiceProvider):
-#     service: NestService = container.resolve(NestService)
-
-#     start_timestamp = request.args.get(
-#         'start_timestamp',
-#         default_start_timestamp())
-
-#     return await service.get_grouped_sensor_data(
-#         start_timestamp=start_timestamp)
+    return await service.get_sensor_history(
+        hours_back=hours_back,
+        sensor_id=sensor_id)
 
 
 @sensor_bp.configure('/api/sensor/info', methods=['GET'], auth_scheme=AuthPolicy.Default)

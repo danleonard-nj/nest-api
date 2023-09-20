@@ -12,16 +12,9 @@ integration_bp = MetaBlueprint('integration_bp', __name__)
 
 
 def get_integration_event_params():
-    start_timestamp = request.args.get('start_timestamp')
-    end_timestamp = request.args.get('end_timestamp')
-    max_results = request.args.get('max_results')
-    sensor_id = request.args.get('sensor_id')
 
     return dict(
-        start_timestamp=start_timestamp,
-        end_timestamp=end_timestamp,
-        sensor_id=sensor_id,
-        max_results=max_results
+
     )
 
 
@@ -29,7 +22,9 @@ def get_integration_event_params():
 async def get_integration_events(container: ServiceProvider):
     service: NestIntegrationService = container.resolve(NestIntegrationService)
 
-    params = get_integration_event_params()
+    days_back = request.args.get('days_back', 1)
+    sensor_id = request.args.get('sensor_id')
 
     return await service.get_integration_events(
-        **params)
+        days_back=days_back,
+        sensor_id=sensor_id)

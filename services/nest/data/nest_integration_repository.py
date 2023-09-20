@@ -18,8 +18,7 @@ class NestIntegrationRepository(MongoRepositoryAsync):
         self,
         start_timestamp: int,
         end_timestamp: int,
-        sensor_id: str = None,
-        max_results=None
+        sensor_id: str = None
     ):
         query_filter = {
             'timestamp': {

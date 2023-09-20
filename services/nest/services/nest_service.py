@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
@@ -9,21 +8,17 @@ from framework.clients.feature_client import FeatureClientAsync
 from framework.concurrency import TaskCollection
 from framework.configuration import Configuration
 from framework.logger import get_logger
+from framework.serialization import Serializable
 
-from clients.email_gateway_client import EmailGatewayClient
 from clients.nest_client import NestClient
 from data.nest_repository import NestSensorRepository
-from domain.cache import CacheKey
 from domain.enums import Feature, HealthStatus, IntegrationEventType
-from domain.nest import (NestSensorData, NestSensorDataQueryResponse,
-                         NestSensorDevice, NestThermostat, SensorHealth,
-                         SensorHealthStats, SensorPollResult)
+from domain.nest import (NestSensorData, NestSensorDevice, NestThermostat,
+                         SensorHealth, SensorHealthStats, SensorPollResult)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
-from services.event_service import EventService
 from services.integration_service import NestIntegrationService
-from framework.serialization import Serializable
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
@@ -167,6 +162,8 @@ class NestService:
     ) -> List[Dict[str, List[NestSensorData]]]:
 
         now = DateTimeUtil.timestamp()
+
+        hours_back = int(hours_back)
         start_timestamp = now - (hours_back * 60 * 60)
 
         logger.info(f'Get sensor data: {start_timestamp}: {device_ids}')
@@ -202,6 +199,25 @@ class NestService:
         df = df.reset_index()
 
         return df.to_dict(orient='records')
+
+    async def get_sensor_history(
+        self,
+        sensor_id: str,
+        hours_back: int
+    ):
+        now = DateTimeUtil.timestamp()
+
+        hours_back = int(hours_back)
+        start_timestamp = now - (hours_back * 60 * 60)
+
+        entities = await self.__sensor_repository.get_by_device(
+            device_id=sensor_id,
+            start_timestamp=start_timestamp)
+
+        data = [NestSensorData.from_entity(data=entity)
+                for entity in entities]
+
+        return data
 
     async def __get_top_sensor_record(
         self,

@@ -65,17 +65,16 @@ class NestIntegrationService:
 
     async def get_integration_events(
         self,
-        start_timestamp: int,
-        end_timestamp: int = None,
-        sensor_id: str = None,
-        max_results: int = None
+        days_back: int,
+        sensor_id: str = None
     ):
+        days_back = int(days_back)
+
+        end_timestamp = DateTimeUtil.timestamp()
+        start_timestamp = end_timestamp - (days_back * 24 * 60 * 60)
 
         logger.info(
             f'Getting integration events: {start_timestamp} to {end_timestamp}')
-
-        start_timestamp = int(start_timestamp)
-        end_timestamp = int(end_timestamp or DateTimeUtil.timestamp())
 
         # Fetch all devices to map onto the integration events
         logger.info('Fetching devicesc')
@@ -85,8 +84,7 @@ class NestIntegrationService:
         entities = await self.__integration_repository.get_integration_events(
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
-            sensor_id=sensor_id,
-            max_results=max_results)
+            sensor_id=sensor_id)
 
         logger.info(f'Integration events fetched: {len(entities)}')
 
