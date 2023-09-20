@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from framework.di.service_provider import ServiceProvider
 from framework.logger.providers import get_logger
 from quart import request
-from zmq import device
 
 from domain.auth import AuthPolicy
 from domain.rest import NestSensorDataRequest, NestSensorLogRequest
@@ -79,10 +78,6 @@ async def get_sensor_id(container: ServiceProvider, sensor_id: str):
 @sensor_bp.configure('/api/sensor/info', methods=['GET'], auth_scheme=AuthPolicy.Default)
 async def get_sensor_info(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
-
-    start_timestamp = request.args.get(
-        'start_timestamp',
-        default_start_timestamp())
 
     return await service.get_sensor_info()
 
