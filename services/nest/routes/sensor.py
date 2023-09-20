@@ -58,24 +58,50 @@ async def post_sensor_data(container: ServiceProvider):
 async def get_sensor_data(container: ServiceProvider):
     service: NestService = container.resolve(NestService)
 
-    start_timestamp = request.args.get(
-        'start_timestamp',
-        default_start_timestamp())
+    hours_back = request.args.get(
+        'hours_back', 1)
+
+    params = request.args.to_dict(flat=False)
+
+    devices = (
+        params.get('device_id', [])
+        if 'devices' in params else []
+    )
+
+    sample = request.args.get('sample', '5min')
 
     return await service.get_sensor_data(
-        start_timestamp=start_timestamp)
+        hours_back == hours_back,
+        device_ids=devices,
+        sample=sample)
 
 
-@sensor_bp.configure('/api/sensor/grouped', methods=['GET'], auth_scheme=AuthPolicy.Default)
-async def get_grouped_sensor_data(container: ServiceProvider):
+@sensor_bp.configure('/api/sensor/<sensor_id>', methods=['GET'], auth_scheme=AuthPolicy.Default)
+async def get_sensor_id(container: ServiceProvider, sensor_id: str):
     service: NestService = container.resolve(NestService)
 
     start_timestamp = request.args.get(
         'start_timestamp',
         default_start_timestamp())
 
-    return await service.get_grouped_sensor_data(
-        start_timestamp=start_timestamp)
+    params = request.args.to_dict(flat=False)
+    devices = params.get('device_id', [])
+
+    return await service.get_sensor_data(
+        start_timestamp=start_timestamp,
+        device_ids=devices)
+
+
+# @sensor_bp.configure('/api/sensor/grouped', methods=['GET'], auth_scheme=AuthPolicy.Default)
+# async def get_grouped_sensor_data(container: ServiceProvider):
+#     service: NestService = container.resolve(NestService)
+
+#     start_timestamp = request.args.get(
+#         'start_timestamp',
+#         default_start_timestamp())
+
+#     return await service.get_grouped_sensor_data(
+#         start_timestamp=start_timestamp)
 
 
 @sensor_bp.configure('/api/sensor/info', methods=['GET'], auth_scheme=AuthPolicy.Default)

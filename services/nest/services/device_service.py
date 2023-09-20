@@ -19,6 +19,18 @@ class NestDeviceService:
         self.__device_repository = device_repository
         self.__cache_client = cache_client
 
+    async def get_devices_by_ids(
+        self,
+        device_ids: list
+    ):
+        entities = await self.__device_repository.get_devices(
+            device_ids=device_ids)
+
+        devices = [NestSensorDevice.from_entity(data=entity)
+                   for entity in entities]
+
+        return devices
+
     async def get_devices(
         self
     ):

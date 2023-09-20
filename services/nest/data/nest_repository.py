@@ -16,6 +16,23 @@ class NestSensorRepository(MongoRepositoryAsync):
             database='Nest',
             collection='Sensor')
 
+    async def get_sensor_data_by_devices(
+        self,
+        device_ids: list[str],
+        start_timestamp: int
+    ):
+        result = self.collection.find({
+            'sensor_id': {
+                '$in': device_ids
+            },
+            'timestamp': {
+                '$gte': int(start_timestamp)
+            }
+        })
+
+        return await result.to_list(
+            length=None)
+
     async def get_by_device(
         self,
         device_id: str,
@@ -67,3 +84,14 @@ class NestDeviceRepository(MongoRepositoryAsync):
             client=client,
             database='Nest',
             collection='Device')
+
+    async def get_devices(
+        self,
+        device_ids: list[str]
+    ):
+        return await self.collection.find({
+            'device_id': {
+                '$in': device_ids
+            }
+        }).to_list(
+            length=None)

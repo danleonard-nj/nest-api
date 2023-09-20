@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
@@ -22,6 +23,7 @@ from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from services.event_service import EventService
 from services.integration_service import NestIntegrationService
+from framework.serialization import Serializable
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
@@ -31,6 +33,30 @@ DEFAULT_PURGE_DAYS = 180
 ALERT_EMAIL_SUBJECT = 'Sensor Failure'
 PURGE_EMAIL_SUBJECT = 'Sensor Data Purge'
 ALERT_EMAIL_RECIPIENT = 'dcl525@gmail.com'
+
+
+class NestSensorReduced(Serializable):
+    def __init__(
+        self,
+        device_id: str,
+        degrees_fahrenheit: float,
+        humidity_percent: float,
+        timestamp: int
+    ):
+        self.device_id = device_id
+        self.degrees_fahrenheit = degrees_fahrenheit
+        self.humidity_percent = humidity_percent
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_sensor(
+        sensor
+    ):
+        return NestSensorReduced(
+            device_id=sensor.sensor_id,
+            degrees_fahrenheit=sensor.degrees_fahrenheit,
+            humidity_percent=sensor.humidity_percent,
+            timestamp=sensor.timestamp)
 
 
 class NestService:
@@ -135,111 +161,47 @@ class NestService:
 
     async def get_sensor_data(
         self,
-        start_timestamp: int
+        hours_back: int,
+        device_ids: List[str],
+        sample: str
     ) -> List[Dict[str, List[NestSensorData]]]:
 
-        logger.info(f'Get sensor data: {start_timestamp}')
+        now = DateTimeUtil.timestamp()
+        start_timestamp = now - (hours_back * 60 * 60)
+
+        logger.info(f'Get sensor data: {start_timestamp}: {device_ids}')
+
         devices = await self.__device_service.get_devices()
 
-        results = list()
+        if not any(device_ids):
+            logger.info(f'No device IDs provided, using all devices')
+            device_ids = [device.device_id for device in devices]
 
-        for device in devices:
-            logger.info(f'Fetching data for device: {device.device_id}')
-
-            entities = await self.__sensor_repository.get_by_device(
-                device_id=device.device_id,
-                start_timestamp=start_timestamp)
-
-            data = [NestSensorData.from_entity(data=entity)
-                    for entity in entities]
-
-            result = {
-                'device_id': device.device_id,
-                'data': data
-            }
-
-            logger.info(
-                f'Device: {device.device_id}: {len(data)} records fetched')
-
-            results.append(result)
-
-        return results
-
-    async def get_grouped_sensor_data(
-        self,
-        start_timestamp: int
-    ):
-        data = await self.get_sensor_data(
+        entities = await self.__sensor_repository.get_sensor_data_by_devices(
+            device_ids=device_ids,
             start_timestamp=start_timestamp)
 
-        tasks = TaskCollection()
+        data = [NestSensorData.from_entity(data=entity)
+                for entity in entities]
 
-        for device in data:
-            device_id = device.get('device_id')
-            entities = device.get('data')
+        reduced = [NestSensorReduced.from_sensor(
+            item).to_dict() for item in data]
 
-            sensor_data = [
-                NestSensorData.from_entity(data=entity)
-                for entity in entities
-            ]
+        device_data = pd.DataFrame([{
+            'device_id': device.device_id,
+            'device_name': device.device_name
+        } for device in devices])
 
-            tasks.add_task(self.group_device_sensor_data(
-                device_id=device_id,
-                sensor_data=sensor_data))
+        df = pd.DataFrame(reduced)
+        df = df.merge(device_data, on='device_id')
 
-        results = await tasks.run()
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        df = df.set_index('timestamp')
 
-        return results
+        df = df.groupby(['device_id', 'device_name']).resample(sample).mean()
+        df = df.reset_index()
 
-    async def group_device_sensor_data(
-        self,
-        device_id: str,
-        sensor_data: List[NestSensorData]
-    ) -> NestSensorDataQueryResponse:
-
-        df = self.__to_dataframe(
-            sensor_data=sensor_data)
-
-        logger.info(f'Uncollapsed row count: {device_id}: {len(sensor_data)}')
-
-        grouped = df.groupby([df['timestamp'].dt.minute]).first()
-
-        logger.info(f'Collapsed row count: {device_id}: {len(grouped)}')
-
-        return NestSensorDataQueryResponse(
-            device_id=device_id,
-            data=grouped.to_dict(orient='records'))
-
-    async def get_cached_group_sensor_data(
-        self,
-        device_id: str,
-        key: str
-    ):
-        cache_key = CacheKey.nest_device_grouped_sensor_data(
-            device_id=device_id,
-            key=key)
-
-        logger.info(f'Get device sensor data: {cache_key}')
-
-        data = await self.__cache_client.get_json(
-            key=cache_key)
-
-    def __to_dataframe(
-        self,
-        sensor_data: List[NestSensorData]
-    ):
-        data = list()
-        for entry in sensor_data:
-            data.append({
-                'key': entry.key,
-                'degrees_celsius': entry.degrees_celsius,
-                'degrees_fahrenheit': entry.degrees_fahrenheit,
-                'humidity_percent': entry.humidity_percent,
-                'diagnostics': entry.diagnostics,
-                'timestamp': entry.get_timestamp_datetime()
-            })
-
-        return pd.DataFrame(data)
+        return df.to_dict(orient='records')
 
     async def __get_top_sensor_record(
         self,
@@ -433,5 +395,5 @@ class NestService:
         msg += '\n'
         msg += f'Cutoff Date: {cutoff_date.isoformat()}\n'
         msg += f'Deleted Count: {deleted_count}\n'
-        
+
         return msg
