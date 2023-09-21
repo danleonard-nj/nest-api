@@ -16,4 +16,13 @@ class NestSensorRepository(MongoRepositoryAsync):
             database='Nest',
             collection='History')
 
-    
+
+class NestThermostatHistoryRepository(MongoRepositoryAsync):
+    def __init__(
+        self,
+        client: AsyncIOMotorClient
+    ):
+        super().__init__(
+            client=client,
+            database='Nest',
+            collection='ThermostatHistory')

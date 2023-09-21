@@ -11,8 +11,9 @@ from framework.logger import get_logger
 from framework.serialization import Serializable
 
 from clients.nest_client import NestClient
+from data.nest_history_repository import NestThermostatHistoryRepository
 from data.nest_repository import NestSensorRepository
-from domain.enums import Feature, HealthStatus, IntegrationEventType
+from domain.enums import Feature, HealthStatus, IntegrationEventType, ThermostatMode
 from domain.nest import (NestSensorData, NestSensorDevice, NestThermostat,
                          SensorHealth, SensorHealthStats, SensorPollResult)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
@@ -54,6 +55,62 @@ class NestSensorReduced(Serializable):
             timestamp=sensor.timestamp)
 
 
+class ThermostatHistory(Serializable):
+    def __init__(
+        self,
+        record_id: str,
+        thermostat_id: str,
+        mode: str,
+        hvac_status,
+        target_temperature: float,
+        ambient_temperature: float,
+        ambient_humidity: float,
+        timestamp: int
+    ):
+        self.record_id = record_id
+        self.thermostat_id = thermostat_id
+        self.mode = mode
+        self.hvac_status = hvac_status
+        self.target_temperature = target_temperature
+        self.ambient_temperature = ambient_temperature
+        self.ambient_humidity = ambient_humidity
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_thermostat(
+        thermostat: NestThermostat
+    ):
+        target_temp = (
+            thermostat.cool_fahrenheit
+            if thermostat.thermostat_mode == ThermostatMode.Cool
+            else thermostat.cool_celsius
+        )
+
+        return ThermostatHistory(
+            record_id=str(uuid.uuid4()),
+            thermostat_id=thermostat.thermostat_id,
+            mode=thermostat.thermostat_mode,
+            hvac_status=thermostat.hvac_status,
+            target_temperature=target_temp,
+            ambient_temperature=thermostat.ambient_temperature_fahrenheit,
+            ambient_humidity=thermostat.humidity_percent,
+            timestamp=DateTimeUtil.timestamp())
+
+    @staticmethod
+    def from_entity(
+        data: Dict
+    ):
+        return ThermostatHistory(
+            record_id=data.get('record_id'),
+            thermostat_id=data.get('thermostat_id'),
+            mode=data.get('mode'),
+            hvac_status=data.get('hvac_status'),
+            target_temperature=data.get('target_temperature'),
+            ambient_temperature=data.get('ambient_temperature'),
+            ambient_humidity=data.get('ambient_humidity'),
+            timestamp=data.get('timestamp'))
+
+
 class NestService:
     def __init__(
         self,
@@ -62,6 +119,7 @@ class NestService:
         sensor_repository: NestSensorRepository,
         device_service: NestDeviceService,
         integration_service: NestIntegrationService,
+        thermostat_repository: NestThermostatHistoryRepository,
         alert_service: AlertService,
         cache_client: CacheClientAsync,
         feature_client: FeatureClientAsync
@@ -78,6 +136,43 @@ class NestService:
         self.__integation_service = integration_service
         self.__feature_client = feature_client
         self.__alert_service = alert_service
+        self.__thermostat_repository = thermostat_repository
+
+    async def handle_thermostat_history(
+        self,
+        thermostat: NestThermostat
+    ):
+        logger.info('Capturing thermostat history')
+
+        history = ThermostatHistory.from_thermostat(
+            thermostat=thermostat)
+
+        logger.info(f'History: {history.to_dict()}')
+
+        await self.__thermostat_repository.insert(
+            document=history.to_dict())
+
+        return history
+
+    async def capture_thermostat_history(
+        self
+    ):
+        logger.info('Capturing thermostat history')
+
+        # Fetch the current thermostat state
+        thermostat = await self.get_thermostat()
+
+        if thermostat is None:
+            logger.info('No thermostat found')
+            raise Exception('No thermostat found')
+
+        logger.info(f'Thermostat: {thermostat.to_dict()}')
+
+        # Store the thermostat history
+        history = await self.handle_thermostat_history(
+            thermostat=thermostat)
+
+        return history
 
     async def get_thermostat(
         self

@@ -13,6 +13,7 @@ from clients.event_client import EventClient
 from clients.identity_client import IdentityClient
 from clients.kasa_client import KasaClient
 from clients.nest_client import NestClient
+from data.nest_history_repository import NestThermostatHistoryRepository
 from data.nest_integration_repository import NestIntegrationRepository
 from data.nest_repository import NestDeviceRepository, NestSensorRepository
 from domain.auth import AuthPolicy
@@ -75,6 +76,7 @@ def register_repositories(descriptors: ServiceCollection):
     descriptors.add_singleton(NestDeviceRepository)
     descriptors.add_singleton(NestSensorRepository)
     descriptors.add_singleton(NestIntegrationRepository)
+    descriptors.add_singleton(NestThermostatHistoryRepository)
 
 
 def register_services(descriptors: ServiceCollection):
