@@ -80,11 +80,19 @@ class ThermostatHistory(Serializable):
     def from_thermostat(
         thermostat: NestThermostat
     ):
-        target_temp = (
-            thermostat.cool_fahrenheit
-            if thermostat.thermostat_mode == ThermostatMode.Cool
-            else thermostat.cool_celsius
-        )
+        target_temp = 0
+        if thermostat.thermostat_mode == ThermostatMode.Cool:
+            target_temp = thermostat.cool_fahrenheit
+        elif thermostat.thermostat_mode == ThermostatMode.Heat:
+            target_temp = thermostat.heat_fahrenheit
+        elif thermostat.thermostat_mode == ThermostatMode.HeatCool:
+            target_temp = (thermostat.heat_fahrenheit,
+                           thermostat.cool_fahrenheit)
+        elif thermostat.thermostat_mode == ThermostatMode.Off:
+            if thermostat.cool_fahrenheit > 0:
+                target_temp = thermostat.cool_fahrenheit
+            elif thermostat.heat_fahrenheit > 0:
+                target_temp = thermostat.heat_fahrenheit
 
         return ThermostatHistory(
             record_id=str(uuid.uuid4()),
@@ -165,8 +173,6 @@ class NestService:
         if thermostat is None:
             logger.info('No thermostat found')
             raise Exception('No thermostat found')
-
-        logger.info(f'Thermostat: {thermostat.to_dict()}')
 
         # Store the thermostat history
         history = await self.handle_thermostat_history(

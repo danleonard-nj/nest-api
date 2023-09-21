@@ -52,7 +52,7 @@ async def get_sensor_data(container: ServiceProvider):
 
     devices = (
         params.get('device_id', [])
-        if 'devices' in params else []
+        if 'device_id' in params else []
     )
 
     sample = request.args.get('sample', '5min')
