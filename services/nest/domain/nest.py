@@ -19,6 +19,7 @@ def to_fahrenheit(
 
 NestCommandTypeMapping = {
     NestCommandType.SetPowerOff: NestCommand.SetMode,
+    NestCommandType.SetMode: NestCommand.SetMode,
     NestCommandType.SetCool: NestCommand.SetCool,
     NestCommandType.SetHeat: NestCommand.SetHeat,
     NestCommandType.SetRange: NestCommand.SetRange,
@@ -516,7 +517,7 @@ class ThermostatHistory(Serializable):
             mode=thermostat.thermostat_mode,
             hvac_status=thermostat.hvac_status,
             target_temperature=target_temp,
-            ambient_temperature=thermostat.ambient_temperature_celsius,
+            ambient_temperature=thermostat.ambient_temperature_fahrenheit,
             ambient_humidity=thermostat.humidity_percent,
             timestamp=DateTimeUtil.timestamp())
 

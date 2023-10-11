@@ -106,7 +106,7 @@ class NestCommandService:
             self.__bust_thermostat_mode_cache())
 
         command = NestCommandClientRequest(
-            command=NestCommandTypeMapping[NestCommandType.SetMode],
+            command=NestCommandTypeMapping[NestCommandType.SetPowerOff],
             mode=mode.value
         )
 

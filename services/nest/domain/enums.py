@@ -24,6 +24,7 @@ class NestCommandType(enum.StrEnum):
     SetHeat = 'set-heat'
     SetCool = 'set-cool'
     SetPowerOff = 'set-power-off'
+    SetMode = 'set-mode'
 
 
 class IntergationDeviceType(enum.StrEnum):
