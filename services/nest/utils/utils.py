@@ -36,16 +36,10 @@ class KeyUtils:
 
 
 def to_celsius(
-    degrees_fahrenheit: Union[int, float],
-    round_digits: int = 2
+    degrees_fahrenheit: Union[int, float]
 ) -> Union[int, float]:
     '''
     Convert degrees Fahrenheit to degrees Celsius
     '''
 
-    value = (degrees_fahrenheit - 32) * (5/9)
-
-    return (
-        int(value) if round_digits == 0
-        else round(value, round_digits)
-    )
+    return (degrees_fahrenheit - 32) * (5/9)

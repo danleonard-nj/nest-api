@@ -145,7 +145,7 @@ class NestCommandService:
         # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetHeat],
-            heatCelsius=to_celsius(heat_degrees_fahrenheit, round_digits=0)
+            heatCelsius=to_celsius(heat_degrees_fahrenheit)
         )
 
         logger.info(f'Command: {command.to_dict()}')
@@ -175,7 +175,7 @@ class NestCommandService:
         # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetCool],
-            coolCelsius=to_celsius(cool_degrees_fahrenheit, round_digits=0)
+            coolCelsius=to_celsius(cool_degrees_fahrenheit)
         )
 
         logger.info(f'Command: {command.to_dict()}')
@@ -205,8 +205,8 @@ class NestCommandService:
         # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetRange],
-            heatCelsius=to_celsius(heat_degrees_fahrenheit, round_digits=0),
-            coolCelsius=to_celsius(cool_degrees_fahrenheit, round_digits=0)
+            heatCelsius=to_celsius(heat_degrees_fahrenheit),
+            coolCelsius=to_celsius(cool_degrees_fahrenheit)
         )
 
         logger.info(f'Set range: {command.to_dict()}')
