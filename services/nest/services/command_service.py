@@ -1,36 +1,21 @@
 import asyncio
-from functools import cache
-from typing import Dict
 
+from framework.clients.cache_client import CacheClientAsync
 from framework.configuration import Configuration
 from framework.logger import get_logger
+from framework.validators.nulls import none_or_whitespace
 
 from clients.nest_client import NestClient
 from domain.cache import CacheKey
 from domain.enums import NestCommandType, ThermostatMode
 from domain.exceptions import (NestThermostatTemperatureException,
                                NestThermostatUnknownCommandException)
-from domain.nest import (NEST_COMMAND_SET_COOL, NEST_COMMAND_SET_HEAT,
-                         NEST_COMMAND_SET_MODE, NEST_COMMAND_SET_RANGE,
-                         CommandListValue, NestThermostat)
-from domain.rest import NestCommandHandlerResponse, NestCommandClientRequest, NestCommandRequest
+from domain.nest import CommandListItem, NestCommandTypeMapping, NestThermostat
+from domain.rest import (NestCommandClientRequest, NestCommandHandlerResponse,
+                         NestCommandRequest)
 from utils.utils import to_celsius
-from framework.validators.nulls import none_or_whitespace
-from framework.clients.cache_client import CacheClientAsync
 
 logger = get_logger(__name__)
-
-
-MINIMUM_ALLOWED_TEMPERATURE = 60
-MAXIMUM_ALLOWED_TEMPERATURE = 85
-
-
-NestCommandTypeMapping = {
-    NestCommandType.SetPowerOff: NEST_COMMAND_SET_MODE,
-    NestCommandType.SetCool: NEST_COMMAND_SET_COOL,
-    NestCommandType.SetHeat: NEST_COMMAND_SET_HEAT,
-    NestCommandType.SetRange: NEST_COMMAND_SET_RANGE,
-}
 
 
 class NestCommandService:
@@ -42,6 +27,11 @@ class NestCommandService:
     ):
         self.__thermostat_id = configuration.nest.get(
             'thermostat_id')
+
+        self.__minimum_allowed_temperature = configuration.nest.get(
+            'minimum_allowed_temperature')
+        self.__maximum_allowed_temperature = configuration.nest.get(
+            'maximum_allowed_temperature')
 
         self.__nest_client = nest_client
         self.__cache_client = cache_client
@@ -116,16 +106,19 @@ class NestCommandService:
             self.__bust_thermostat_mode_cache())
 
         command = NestCommandClientRequest(
-            command=NEST_COMMAND_SET_MODE,
+            command=NestCommandTypeMapping[NestCommandType.SetMode],
             mode=mode.value
         )
 
-        logger.info(f'Set mode: {mode}')
-        logger.info(f'Command: {command.to_dict()}')
+        logger.info(f'Set mode: {mode}: {command.to_dict()}')
 
         result = await self.__nest_client.execute_command(
             command=command.to_dict())
 
+        logger.info(f'Result: {result}')
+
+        # Optional delay after the mode is set to allow the thermostat
+        # to update
         if delay_seconds > 0:
             logger.info(f'Sleeping for {delay_seconds} seconds')
             await asyncio.sleep(delay_seconds)
@@ -134,24 +127,25 @@ class NestCommandService:
 
     async def set_heat(
         self,
-        params: Dict
-    ) -> Dict:
+        params: dict
+    ) -> dict:
 
         logger.info(f'Set heat: {params}')
         heat_degrees_fahrenheit = params.get('heat_degrees_fahrenheit')
 
-        if heat_degrees_fahrenheit > MAXIMUM_ALLOWED_TEMPERATURE:
+        if heat_degrees_fahrenheit > self.__maximum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Heat degrees: {heat_degrees_fahrenheit}: exceeds maximum temp: {MAXIMUM_ALLOWED_TEMPERATURE}')
+                f'Heat degrees: {heat_degrees_fahrenheit}: exceeds maximum temp: {self.__maximum_allowed_temperature}')
 
         # Set the thermostat mode to heat
         logger.info('Setting thermostat mode to heat')
         await self.set_thermostat_mode(
             mode=ThermostatMode.Heat)
 
+        # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetHeat],
-            heatCelsius=to_celsius(heat_degrees_fahrenheit)
+            heatCelsius=to_celsius(heat_degrees_fahrenheit, round_digits=0)
         )
 
         logger.info(f'Command: {command.to_dict()}')
@@ -160,16 +154,16 @@ class NestCommandService:
 
     async def set_cool(
         self,
-        params: Dict
-    ) -> Dict:
+        params: dict
+    ) -> dict:
 
         logger.info(f'Set cool: {params}')
         cool_degrees_fahrenheit = params.get(
             'cool_degrees_fahrenheit')
 
-        if cool_degrees_fahrenheit < MINIMUM_ALLOWED_TEMPERATURE:
+        if cool_degrees_fahrenheit < self.__minimum_allowed_temperature:
             logger.info(
-                f'Cool degrees: {cool_degrees_fahrenheit}: exceeds minimum temp: {MINIMUM_ALLOWED_TEMPERATURE}')
+                f'Cool degrees: {cool_degrees_fahrenheit}: exceeds minimum temp: {self.__minimum_allowed_temperature}')
 
             raise Exception('Too cold!')
 
@@ -178,9 +172,10 @@ class NestCommandService:
         await self.set_thermostat_mode(
             mode=ThermostatMode.Cool)
 
+        # Generate the command
         command = NestCommandClientRequest(
-            command=NEST_COMMAND_SET_COOL,
-            coolCelsius=to_celsius(cool_degrees_fahrenheit)
+            command=NestCommandTypeMapping[NestCommandType.SetCool],
+            coolCelsius=to_celsius(cool_degrees_fahrenheit, round_digits=0)
         )
 
         logger.info(f'Command: {command.to_dict()}')
@@ -189,28 +184,29 @@ class NestCommandService:
 
     async def set_range(
         self,
-        params: Dict
-    ) -> Dict:
+        params: dict
+    ) -> dict:
 
         heat_degrees_fahrenheit = params.get('heat_degrees_fahrenheit')
         cool_degrees_fahrenheit = params.get('cool_degrees_fahrenheit')
 
-        if heat_degrees_fahrenheit > 85:
+        if heat_degrees_fahrenheit > self.__maximum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Temperature exceeds safety maximum of {MAXIMUM_ALLOWED_TEMPERATURE} degrees fahrenheit')
+                f'Temperature exceeds safety maximum of {self.__maximum_allowed_temperature} degrees fahrenheit')
 
-        if cool_degrees_fahrenheit < 60:
+        if cool_degrees_fahrenheit < self.__minimum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Temperature falls below safety minimum of {MINIMUM_ALLOWED_TEMPERATURE} degrees fahrenheit')
+                f'Temperature falls below safety minimum of {self.__minimum_allowed_temperature} degrees fahrenheit')
 
-        # Set the thermostat mode to heat
+        # Set the thermostat mode to range
         await self.set_thermostat_mode(
             mode=ThermostatMode.Range)
 
+        # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetRange],
-            heatCelsius=to_celsius(heat_degrees_fahrenheit),
-            coolCelsius=to_celsius(cool_degrees_fahrenheit)
+            heatCelsius=to_celsius(heat_degrees_fahrenheit, round_digits=0),
+            coolCelsius=to_celsius(cool_degrees_fahrenheit, round_digits=0)
         )
 
         logger.info(f'Set range: {command.to_dict()}')
@@ -221,32 +217,32 @@ class NestCommandService:
         self
     ):
         logger.info('Set power off')
+
         return await self.set_thermostat_mode(
             mode=ThermostatMode.Off,
             delay_seconds=0)
 
     async def list_commands(
         self
-    ):
+    ) -> list[CommandListItem]:
         logger.info(f'Listing commands')
 
         commands = []
-
         for command in NestCommandType:
-            value = CommandListValue(
+
+            value = CommandListItem(
                 command=command.name,
                 key=command.value)
 
-            logger.info(f'Command: {value.to_dict()}')
             commands.append(value)
 
         return commands
 
     async def __delegate_command(
         self,
-        command_type,
-        params
-    ) -> Dict:
+        command_type: NestCommandType,
+        params: dict
+    ) -> dict:
 
         logger.info(f'Delegate command type: {command_type}: {params}')
 

@@ -8,14 +8,14 @@ from framework.clients.feature_client import FeatureClientAsync
 from framework.concurrency import TaskCollection
 from framework.configuration import Configuration
 from framework.logger import get_logger
-from framework.serialization import Serializable
 
 from clients.nest_client import NestClient
 from data.nest_history_repository import NestThermostatHistoryRepository
-from data.nest_repository import NestSensorRepository
-from domain.enums import Feature, HealthStatus, IntegrationEventType, ThermostatMode
-from domain.nest import (NestSensorData, NestSensorDevice, NestThermostat,
-                         SensorHealth, SensorHealthStats, SensorPollResult)
+from data.nest_sensor_repository import NestSensorRepository
+from domain.enums import Feature, HealthStatus, IntegrationEventType
+from domain.nest import (NestSensorData, NestSensorDevice, NestSensorReduced, NestThermostat,
+                         SensorHealthSummary, SensorHealthStats, SensorPollResult,
+                         ThermostatHistory)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
@@ -24,99 +24,10 @@ from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
 
-SENSOR_UNHEALTHY_SECONDS = 90
+DEFAULT_SENSOR_UNHEALTHY_SECONDS = 90
 DEFAULT_PURGE_DAYS = 180
 ALERT_EMAIL_SUBJECT = 'Sensor Failure'
 PURGE_EMAIL_SUBJECT = 'Sensor Data Purge'
-ALERT_EMAIL_RECIPIENT = 'dcl525@gmail.com'
-
-
-class NestSensorReduced(Serializable):
-    def __init__(
-        self,
-        device_id: str,
-        degrees_fahrenheit: float,
-        humidity_percent: float,
-        timestamp: int
-    ):
-        self.device_id = device_id
-        self.degrees_fahrenheit = degrees_fahrenheit
-        self.humidity_percent = humidity_percent
-        self.timestamp = timestamp
-
-    @staticmethod
-    def from_sensor(
-        sensor
-    ):
-        return NestSensorReduced(
-            device_id=sensor.sensor_id,
-            degrees_fahrenheit=sensor.degrees_fahrenheit,
-            humidity_percent=sensor.humidity_percent,
-            timestamp=sensor.timestamp)
-
-
-class ThermostatHistory(Serializable):
-    def __init__(
-        self,
-        record_id: str,
-        thermostat_id: str,
-        mode: str,
-        hvac_status,
-        target_temperature: float,
-        ambient_temperature: float,
-        ambient_humidity: float,
-        timestamp: int
-    ):
-        self.record_id = record_id
-        self.thermostat_id = thermostat_id
-        self.mode = mode
-        self.hvac_status = hvac_status
-        self.target_temperature = target_temperature
-        self.ambient_temperature = ambient_temperature
-        self.ambient_humidity = ambient_humidity
-        self.timestamp = timestamp
-
-    @staticmethod
-    def from_thermostat(
-        thermostat: NestThermostat
-    ):
-        target_temp = 0
-        if thermostat.thermostat_mode == ThermostatMode.Cool:
-            target_temp = thermostat.cool_fahrenheit
-        elif thermostat.thermostat_mode == ThermostatMode.Heat:
-            target_temp = thermostat.heat_fahrenheit
-        elif thermostat.thermostat_mode == ThermostatMode.HeatCool:
-            target_temp = (thermostat.heat_fahrenheit,
-                           thermostat.cool_fahrenheit)
-        elif thermostat.thermostat_mode == ThermostatMode.Off:
-            if thermostat.cool_fahrenheit > 0:
-                target_temp = thermostat.cool_fahrenheit
-            elif thermostat.heat_fahrenheit > 0:
-                target_temp = thermostat.heat_fahrenheit
-
-        return ThermostatHistory(
-            record_id=str(uuid.uuid4()),
-            thermostat_id=thermostat.thermostat_id,
-            mode=thermostat.thermostat_mode,
-            hvac_status=thermostat.hvac_status,
-            target_temperature=target_temp,
-            ambient_temperature=thermostat.ambient_temperature_fahrenheit,
-            ambient_humidity=thermostat.humidity_percent,
-            timestamp=DateTimeUtil.timestamp())
-
-    @staticmethod
-    def from_entity(
-        data: Dict
-    ):
-        return ThermostatHistory(
-            record_id=data.get('record_id'),
-            thermostat_id=data.get('thermostat_id'),
-            mode=data.get('mode'),
-            hvac_status=data.get('hvac_status'),
-            target_temperature=data.get('target_temperature'),
-            ambient_temperature=data.get('ambient_temperature'),
-            ambient_humidity=data.get('ambient_humidity'),
-            timestamp=data.get('timestamp'))
 
 
 class NestService:
@@ -136,6 +47,11 @@ class NestService:
             'thermostat_id')
         self.__purge_days = configuration.nest.get(
             'purge_days', DEFAULT_PURGE_DAYS)
+
+        self.__sensor_unhealthy_seconds = configuration.nest.get(
+            'sensor_unhealthy_seconds', DEFAULT_SENSOR_UNHEALTHY_SECONDS)
+        self.__alert_recipient = configuration.nest.get(
+            'alert_recipient')
 
         self.__nest_client = nest_client
         self.__sensor_repository = sensor_repository
@@ -248,7 +164,7 @@ class NestService:
 
         # Send an alert email to notify the purge ran
         await self.__alert_service.send_alert(
-            recipient=ALERT_EMAIL_RECIPIENT,
+            recipient=self.__alert_recipient,
             subject=PURGE_EMAIL_SUBJECT,
             body=alert_body)
 
@@ -275,27 +191,36 @@ class NestService:
             logger.info(f'No device IDs provided, using all devices')
             device_ids = [device.device_id for device in devices]
 
+        logger.info(f'Fetching data for sensors: {device_ids}')
         entities = await self.__sensor_repository.get_sensor_data_by_devices(
             device_ids=device_ids,
             start_timestamp=start_timestamp)
 
+        logger.info(f'Fetched {len(entities)} records')
+
+        # TODO: Simplify this and remove the reduced model
         data = [NestSensorData.from_entity(data=entity)
                 for entity in entities]
 
         reduced = [NestSensorReduced.from_sensor(
             item).to_dict() for item in data]
 
+        # Get a lookup df of the device IDs and names
         device_data = pd.DataFrame([{
             'device_id': device.device_id,
             'device_name': device.device_name
         } for device in devices])
 
         df = pd.DataFrame(reduced)
+
+        # Merge the device lookup df on the sensor data
         df = df.merge(device_data, on='device_id')
 
+        # Handle datetimes and set the index
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         df = df.set_index('timestamp')
 
+        # Group by and sample data
         df = df.groupby(['device_id', 'device_name']).resample(sample).mean()
         df = df.reset_index()
 
@@ -323,9 +248,10 @@ class NestService:
     async def __get_top_sensor_record(
         self,
         device_id: str
-    ) -> NestSensorData:
+    ) -> NestSensorData | None:
 
         logger.info(f'Getting top sensor record: {device_id}')
+
         last_entity = await self.__sensor_repository.get_top_sensor_record(
             sensor_id=device_id)
 
@@ -349,10 +275,10 @@ class NestService:
 
         seconds_elapsed = now - record.timestamp
 
-        # Health status (healthy/unhealthy)
+        # Determine health status
         health_status = (
             HealthStatus.Unhealthy
-            if seconds_elapsed >= SENSOR_UNHEALTHY_SECONDS
+            if seconds_elapsed >= self.__sensor_unhealthy_seconds
             else HealthStatus.Healthy
         )
 
@@ -365,7 +291,7 @@ class NestService:
 
     async def get_sensor_info(
         self
-    ) -> List[SensorHealth]:
+    ) -> List[SensorHealthSummary]:
 
         logger.info(f'Getting sensor info')
         devices = await self.__device_service.get_devices()
@@ -393,7 +319,7 @@ class NestService:
                 last_contact=last_record.timestamp,
                 seconds_elapsed=seconds_elapsed)
 
-            health = SensorHealth(
+            health = SensorHealthSummary(
                 device_id=device.device_id,
                 device_name=device.device_name,
                 health=stats,
@@ -403,12 +329,10 @@ class NestService:
             device_health.append(health)
 
         # Fetch the sensor health info in parallel
-        tasks = TaskCollection(*[
+        await TaskCollection(*[
             handle_sensor_health_check(device)
             for device in devices
-        ])
-
-        await tasks.run()
+        ]).run()
 
         logger.info(f'Sorting results by device name')
         device_health.sort(key=lambda x: x.device_name)
@@ -481,7 +405,7 @@ class NestService:
                     elapsed_seconds=sensor_health.health.seconds_elapsed)
 
                 await self.__alert_service.send_alert(
-                    recipient=ALERT_EMAIL_RECIPIENT,
+                    recipient=self.__alert_recipient,
                     subject=f'{ALERT_EMAIL_SUBJECT}: {sensor_health.device_name}',
                     body=body)
 
@@ -506,7 +430,7 @@ class NestService:
     def __get_email_message_body(
         self,
         cutoff_date: datetime,
-        deleted_count
+        deleted_count: int
     ) -> str:
         msg = 'Sensor Data Service\n'
         msg += '\n'

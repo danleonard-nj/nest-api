@@ -1,5 +1,7 @@
+from datetime import datetime
 import hashlib
 import json
+import math
 import time
 from typing import Union
 import uuid
@@ -9,6 +11,14 @@ class DateTimeUtil:
     @staticmethod
     def timestamp() -> int:
         return int(time.time())
+
+    @staticmethod
+    def az_local() -> str:
+        now = (
+            datetime.utcnow() - datetime.timedelta(hours=7)
+        )
+
+        return now.isoformat()
 
 
 class KeyUtils:
@@ -34,4 +44,8 @@ def to_celsius(
     '''
 
     value = (degrees_fahrenheit - 32) * (5/9)
-    return round(value, round_digits)
+
+    return (
+        int(value) if round_digits == 0
+        else round(value, round_digits)
+    )

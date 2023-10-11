@@ -1,6 +1,12 @@
 import enum
 
 
+NEST_COMMAND_SET_HEAT = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat'
+NEST_COMMAND_SET_COOL = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetCool'
+NEST_COMMAND_SET_RANGE = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange'
+NEST_COMMAND_SET_MODE = 'sdm.devices.commands.ThermostatMode.SetMode'
+
+
 class HealthStatus(enum.StrEnum):
     Healthy = 'healthy'
     Unhealthy = 'unhealthy'
@@ -46,3 +52,10 @@ class KasaIntegrationSceneType(enum.StrEnum):
 
 class Feature(enum.StrEnum):
     NestHealthCheckEmailAlerts = 'nest-health-check-email-alerts'
+
+
+class NestCommand(enum.StrEnum):
+    SetMode = NEST_COMMAND_SET_MODE
+    SetCool = NEST_COMMAND_SET_COOL
+    SetHeat = NEST_COMMAND_SET_HEAT
+    SetRange = NEST_COMMAND_SET_RANGE

@@ -6,6 +6,7 @@ from framework.rest.blueprints.meta import MetaBlueprint
 
 from clients.nest_client import NestClient
 from domain.auth import AuthPolicy
+from domain.rest import NestTokenResponse
 from services.nest_service import NestService
 
 logger = get_logger(__name__)
@@ -24,9 +25,8 @@ async def get_auth_creds(container: ServiceProvider):
 
     token = await service.get_token()
 
-    return {
-        'token': token
-    }
+    return NestTokenResponse(
+        token=token)
 
 
 @nest_bp.configure('/api/thermostat', methods=['GET'], auth_scheme=AuthPolicy.Default)

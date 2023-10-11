@@ -3,7 +3,7 @@ import asyncio
 from framework.logger import get_logger
 
 from framework.clients.cache_client import CacheClientAsync
-from data.nest_repository import NestDeviceRepository
+from data.nest_sensor_repository import NestDeviceRepository
 from domain.cache import CacheKey
 from domain.nest import NestSensorDevice
 

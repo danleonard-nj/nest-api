@@ -1,20 +1,12 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timedelta
-from typing import Dict, List, Union
+from typing import Dict, List
 
 from framework.serialization import Serializable
-from domain.enums import NestCommandType, ThermostatMode
 
-from utils.helpers import parse
+from domain.enums import NestCommand, NestCommandType, ThermostatMode
 from utils.utils import DateTimeUtil
-
-
-NEST_COMMAND_SET_HEAT = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat'
-NEST_COMMAND_SET_COOL = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetCool'
-NEST_COMMAND_SET_RANGE = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange'
-NEST_COMMAND_SET_MODE = 'sdm.devices.commands.ThermostatMode.SetMode'
 
 
 def to_fahrenheit(
@@ -23,6 +15,14 @@ def to_fahrenheit(
     if celsius is None or celsius == 0:
         return 0
     return round((celsius * 9/5) + 32, 1)
+
+
+NestCommandTypeMapping = {
+    NestCommandType.SetPowerOff: NestCommand.SetMode,
+    NestCommandType.SetCool: NestCommand.SetCool,
+    NestCommandType.SetHeat: NestCommand.SetHeat,
+    NestCommandType.SetRange: NestCommand.SetRange,
+}
 
 
 class NestConfiguration:
@@ -183,7 +183,9 @@ class NestThermostat(Serializable):
             and self.thermostat_mode != ThermostatMode.Off
         )
 
-    def to_dict(self) -> Dict:
+    def to_dict(
+        self
+    ) -> Dict:
         return super().to_dict() | {
             'thermostat_eco_cool_fahrenheit': self.thermostat_eco_cool_fahrenheit,
             'thermostat_eco_heat_fahrenheit': self.thermostat_eco_heat_fahrenheit,
@@ -355,14 +357,6 @@ class NestSensorData(Serializable):
         key = uuid.UUID(hashed.hexdigest())
         return str(key)
 
-    def get_datetime_from_timestamp(
-        self
-    ) -> datetime:
-
-        parsed = datetime.fromtimestamp(
-            self.timestamp)
-        return parsed - timedelta(hours=7)
-
     @staticmethod
     def from_entity(data):
         return NestSensorData(
@@ -393,16 +387,6 @@ class NestSensorDevice(Serializable):
             created_date=data.get('created_date'))
 
 
-class NestSensorDataQueryResponse(Serializable):
-    def __init__(
-        self,
-        device_id: str,
-        data: List[NestSensorData]
-    ):
-        self.device_id = device_id
-        self.data = data
-
-
 class SensorHealthStats(Serializable):
     def __init__(
         self,
@@ -415,7 +399,7 @@ class SensorHealthStats(Serializable):
         self.seconds_elapsed = seconds_elapsed
 
 
-class SensorHealth(Serializable):
+class SensorHealthSummary(Serializable):
     def __init__(
         self,
         device_id: str,
@@ -448,32 +432,7 @@ class SensorPollResult(Serializable):
         self.integration = integration or dict()
 
 
-class NestHistoryRecord:
-    def __init__(
-        self,
-        history_id: str,
-        command_type: str,
-        params: Dict,
-        thermostat: Dict,
-        timestamp: int
-    ):
-        self.history_id = history_id
-        self.command_type = command_type
-        self.params = params
-        self.thermostat = thermostat
-        self.timestamp = timestamp
-
-    @staticmethod
-    def from_entity(data):
-        return NestHistoryRecord(
-            history_id=data.get('history_id'),
-            command_type=data.get('command_type'),
-            params=data.get('params'),
-            thermostat=data.get('thermostat'),
-            timestamp=DateTimeUtil.timestamp())
-
-
-class CommandListValue(Serializable):
+class CommandListItem(Serializable):
     def __init__(
         self,
         command: str,
@@ -481,3 +440,96 @@ class CommandListValue(Serializable):
     ):
         self.command = command
         self.key = key
+
+
+class NestSensorReduced(Serializable):
+    def __init__(
+        self,
+        device_id: str,
+        degrees_fahrenheit: float,
+        humidity_percent: float,
+        timestamp: int
+    ):
+        self.device_id = device_id
+        self.degrees_fahrenheit = degrees_fahrenheit
+        self.humidity_percent = humidity_percent
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_sensor(
+        sensor
+    ):
+        return NestSensorReduced(
+            device_id=sensor.sensor_id,
+            degrees_fahrenheit=sensor.degrees_fahrenheit,
+            humidity_percent=sensor.humidity_percent,
+            timestamp=sensor.timestamp)
+
+
+class ThermostatHistory(Serializable):
+    def __init__(
+        self,
+        record_id: str,
+        thermostat_id: str,
+        mode: str,
+        hvac_status,
+        target_temperature: float,
+        ambient_temperature: float,
+        ambient_humidity: float,
+        timestamp: int
+    ):
+        self.record_id = record_id
+        self.thermostat_id = thermostat_id
+        self.mode = mode
+        self.hvac_status = hvac_status
+        self.target_temperature = target_temperature
+        self.ambient_temperature = ambient_temperature
+        self.ambient_humidity = ambient_humidity
+        self.timestamp = timestamp
+
+    @staticmethod
+    def from_thermostat(
+        thermostat: NestThermostat
+    ):
+        target_temp = 0
+
+        if thermostat.thermostat_mode == ThermostatMode.Cool:
+            target_temp = thermostat.cool_fahrenheit
+
+        elif thermostat.thermostat_mode == ThermostatMode.Heat:
+            target_temp = thermostat.heat_fahrenheit
+
+        elif thermostat.thermostat_mode in [ThermostatMode.HeatCool,
+                                            ThermostatMode.Off]:
+            target_temp = (thermostat.heat_fahrenheit,
+                           thermostat.cool_fahrenheit)
+
+        elif thermostat.thermostat_mode == ThermostatMode.Off:
+            if thermostat.cool_fahrenheit > 0:
+                target_temp = thermostat.cool_fahrenheit
+            elif thermostat.heat_fahrenheit > 0:
+                target_temp = thermostat.heat_fahrenheit
+
+        return ThermostatHistory(
+            record_id=str(uuid.uuid4()),
+            thermostat_id=thermostat.thermostat_id,
+            mode=thermostat.thermostat_mode,
+            hvac_status=thermostat.hvac_status,
+            target_temperature=target_temp,
+            ambient_temperature=thermostat.ambient_temperature_celsius,
+            ambient_humidity=thermostat.humidity_percent,
+            timestamp=DateTimeUtil.timestamp())
+
+    @staticmethod
+    def from_entity(
+        data: Dict
+    ):
+        return ThermostatHistory(
+            record_id=data.get('record_id'),
+            thermostat_id=data.get('thermostat_id'),
+            mode=data.get('mode'),
+            hvac_status=data.get('hvac_status'),
+            target_temperature=data.get('target_temperature'),
+            ambient_temperature=data.get('ambient_temperature'),
+            ambient_humidity=data.get('ambient_humidity'),
+            timestamp=data.get('timestamp'))

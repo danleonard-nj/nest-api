@@ -183,3 +183,11 @@ class IntegrationEventResponse(Serializable):
             result=data.get('result'),
             timestamp=data.get('timestamp')
         )
+
+
+class NestTokenResponse(Serializable):
+    def __init__(
+        self,
+        token: str
+    ):
+        self.token = token

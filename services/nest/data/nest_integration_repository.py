@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from framework.mongo.mongo_repository import MongoRepositoryAsync
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -19,7 +19,8 @@ class NestIntegrationRepository(MongoRepositoryAsync):
         start_timestamp: int,
         end_timestamp: int,
         sensor_id: str = None
-    ):
+    ) -> list[dict[str, any]]:
+
         query_filter = {
             'timestamp': {
                 '$gt': start_timestamp,
@@ -39,7 +40,7 @@ class NestIntegrationRepository(MongoRepositoryAsync):
     async def get_latest_integation_event_by_sensor(
         self,
         sensor_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
 
         query_filter = {
             'sensor_id': sensor_id

@@ -1,12 +1,9 @@
 import asyncio
 import uuid
-from collections.abc import Iterable
-from typing import Dict, Union
 
 import pandas as pd
 from framework.configuration import Configuration
 from framework.logger import get_logger
-from framework.serialization import Serializable
 from framework.validators.nulls import none_or_whitespace
 
 from clients.kasa_client import KasaClient
@@ -25,10 +22,6 @@ from utils.helpers import parse
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
-
-MINIMUM_EVENT_INTERVAL_MINUTES = 60
-ALERT_RECIPIENT = 'dcl525@gmail.com'
-POWER_CYCLE_INTERVAL_SECONDS = 5
 
 
 class NestIntegrationService:
@@ -54,6 +47,13 @@ class NestIntegrationService:
         self.__device_service = device_service
         self.__kasa_client = kasa_client
         self.__alert_service = alert_service
+
+        self.__minimum_integration_interval = configuration.nest.get(
+            'minimum_integration_interval')
+        self.__alert_recipient = configuration.nest.get(
+            'alert_recipient')
+        self.__integration_power_cycle_seconds = configuration.nest.get(
+            'integration_power_cycle_seconds')
 
         self.__integrations = None
 
@@ -159,10 +159,10 @@ class NestIntegrationService:
             # If the minimum interval hasn't been met since the
             # last integration event
             if (now - latest_event.timestamp <
-                    (MINIMUM_EVENT_INTERVAL_MINUTES * 60)):
+                    (self.__minimum_integration_interval * 60)):
 
                 logger.info(
-                    f"Minimum interval of '{MINIMUM_EVENT_INTERVAL_MINUTES}' minutes has not passed since the last event")
+                    f"Minimum interval of '{self.__minimum_integration_interval}' minutes has not passed since the last event")
 
                 return HandleIntegrationEventResponse(
                     integration_event_type=event_type,
@@ -201,7 +201,7 @@ class NestIntegrationService:
         self,
         sensor: NestSensorDevice,
         integration_config: DeviceIntegrationConfig,
-        integration_event_type: Union[IntegrationEventType, str]
+        integration_event_type: IntegrationEventType | str
     ):
         sensor_id = sensor.device_id
         integration_event_type = parse(
@@ -281,8 +281,8 @@ class NestIntegrationService:
                 message=f'An error occurred while sending the request to run the power off scene: {str(ex)}')
 
         logger.info(
-            f'Sleeping for cycle interval {POWER_CYCLE_INTERVAL_SECONDS} seconds')
-        await asyncio.sleep(POWER_CYCLE_INTERVAL_SECONDS)
+            f'Sleeping for cycle interval {self.__integration_power_cycle_seconds} seconds')
+        await asyncio.sleep(self.__integration_power_cycle_seconds)
 
         try:
             # Send the request to run the power on scene
@@ -326,25 +326,28 @@ class NestIntegrationService:
         self,
         sensor: NestSensorDevice,
         event_type: IntegrationEventType,
-        data: Dict
+        data: dict
     ):
         subject = f'Integration Event For Sensor {sensor.device_name}: {event_type}'
 
         if not isinstance(data, list):
             data = [data]
 
+        for row in data:
+            row['timestamp'] = DateTimeUtil.az_local()
+
         await self.__alert_service.send_datatable_email(
-            recipient=ALERT_RECIPIENT,
+            recipient=self.__alert_recipient,
             subject=subject,
             data=data)
 
     def __load_integration_lookup(
         self,
-        data: Dict
-    ) -> Dict[str, DeviceIntegrationConfig]:
+        data: dict
+    ) -> dict[str, DeviceIntegrationConfig]:
 
-        devices = data.get('devices', list())
         logger.info(f'Loading device integrations: {devices}')
+        devices = data.get('devices', list())
 
         integrations = [DeviceIntegrationConfig.from_json_object(data=device)
                         for device in devices]

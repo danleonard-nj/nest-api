@@ -97,7 +97,7 @@ class EmailGatewayClient:
 
         return content, endpoint
 
-    def get_email_request(
+    def get_email_event_request(
         self,
         recipient: str,
         subject: str,

@@ -32,3 +32,8 @@ class NestThermostatTemperatureException(Exception):
 class NestThermostatUnknownCommandException(Exception):
     def __init__(self, command_type, *args: object) -> None:
         super().__init__(f"Nest command type '{command_type}' is not known")
+
+
+class NestAuthorizationFailureException(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__('Failed to fetch Nest token from auth client')

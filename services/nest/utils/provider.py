@@ -15,7 +15,7 @@ from clients.kasa_client import KasaClient
 from clients.nest_client import NestClient
 from data.nest_history_repository import NestThermostatHistoryRepository
 from data.nest_integration_repository import NestIntegrationRepository
-from data.nest_repository import NestDeviceRepository, NestSensorRepository
+from data.nest_sensor_repository import NestDeviceRepository, NestSensorRepository
 from domain.auth import AuthPolicy
 from services.alert_service import AlertService
 from services.command_service import NestCommandService

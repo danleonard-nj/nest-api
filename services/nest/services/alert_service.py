@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from typing import Dict, List
 
 from framework.logger import get_logger
 
@@ -25,7 +24,7 @@ class AlertService:
         body: str
     ) -> None:
 
-        email_request, endpoint = self.__email_client.get_email_request(
+        email_request, endpoint = self.__email_client.get_email_event_request(
             recipient=recipient,
             subject=subject,
             body=body)
@@ -41,7 +40,7 @@ class AlertService:
         self,
         recipient: str,
         subject: str,
-        data: List[Dict]
+        data: list[dict] | Iterable[dict] | dict
     ) -> None:
 
         if not isinstance(data, Iterable):
