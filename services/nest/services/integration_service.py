@@ -346,8 +346,8 @@ class NestIntegrationService:
         data: dict
     ) -> dict[str, DeviceIntegrationConfig]:
 
-        logger.info(f'Loading device integrations: {devices}')
         devices = data.get('devices', list())
+        logger.info(f'Loading device integrations: {devices}')
 
         integrations = [DeviceIntegrationConfig.from_json_object(data=device)
                         for device in devices]
