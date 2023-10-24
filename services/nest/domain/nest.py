@@ -8,15 +8,6 @@ from framework.serialization import Serializable
 from domain.enums import NestCommand, NestCommandType, ThermostatMode
 from utils.utils import DateTimeUtil
 
-
-def to_fahrenheit(
-    celsius: float
-) -> float:
-    if celsius is None or celsius == 0:
-        return 0
-    return round((celsius * 9/5) + 32, 1)
-
-
 NestCommandTypeMapping = {
     NestCommandType.SetPowerOff: NestCommand.SetMode,
     NestCommandType.SetMode: NestCommand.SetMode,
@@ -26,15 +17,23 @@ NestCommandTypeMapping = {
 }
 
 
-class NestConfiguration:
-    def __init_(
-        self,
-        data: Dict
-    ):
-        self.expiration_minutes = data.get('expiration_minutes')
-        self.notification_recipients = data.get('notification_recipients')
-        self.contacts = data.get('contacts')
-        self.created_date = data.get('created_date')
+def to_fahrenheit(
+    celsius: float
+) -> float:
+    if celsius is None or celsius == 0:
+        return 0
+    return round((celsius * 9/5) + 32, 1)
+
+
+# class NestConfiguration:
+#     def __init_(
+#         self,
+#         data: Dict
+#     ):
+#         self.expiration_minutes = data.get('expiration_minutes')
+#         self.notification_recipients = data.get('notification_recipients')
+#         self.contacts = data.get('contacts')
+#         self.created_date = data.get('created_date')
 
 
 class NestThermostatMode:

@@ -33,7 +33,7 @@ class NestDeviceService:
 
     async def get_devices(
         self
-    ):
+    ) -> list[NestSensorDevice]:
 
         key = CacheKey.nest_devices()
 
@@ -43,13 +43,14 @@ class NestDeviceService:
             key=key)
 
         if entities is not None and any(entities):
-            logger.info(f'Cache hit: {key}')
+            logger.info(f'Returning devices from cache: {key}')
 
             # Return cached devices
             return [NestSensorDevice.from_entity(data=entity)
                     for entity in entities]
 
         # Fetch devices from database
+        logger.info(f'Fetching devices from database: {key}')
         entities = await self.__device_repository.get_all()
 
         # Fire and forget the cache task
@@ -74,7 +75,7 @@ class NestDeviceService:
             key=key)
 
         if entity is not None:
-            logger.info(f'Cache hit: {key}')
+            logger.info(f'Returning device from cache: {key}')
 
             # Return the cached device
             return NestSensorDevice.from_entity(

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 import math
@@ -15,7 +15,7 @@ class DateTimeUtil:
     @staticmethod
     def az_local() -> str:
         now = (
-            datetime.utcnow() - datetime.timedelta(hours=7)
+            datetime.utcnow() - timedelta(hours=7)
         )
 
         return now.isoformat()

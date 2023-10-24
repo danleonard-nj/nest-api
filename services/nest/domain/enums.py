@@ -1,6 +1,5 @@
 import enum
 
-
 NEST_COMMAND_SET_HEAT = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat'
 NEST_COMMAND_SET_COOL = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetCool'
 NEST_COMMAND_SET_RANGE = 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange'
@@ -40,8 +39,8 @@ class IntegrationEventResult(enum.StrEnum):
     Success = 'success'
     Failure = 'failure'
     NotSupported = 'not-supported'
-    MinimumIntervalNotMet = 'minimum-interval-not-met'
-    NoOp = 'no-op'
+    MinimumInterval = 'minimum-interval'
+    NoAction = 'no-action'
     InvalidConfiguration = 'invalid-configuration'
     Error = 'error'
 

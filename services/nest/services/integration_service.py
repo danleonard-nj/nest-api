@@ -67,17 +67,18 @@ class NestIntegrationService:
         self,
         days_back: int,
         sensor_id: str = None
-    ):
+    ) -> list[IntegrationEventResponse]:
+
         days_back = int(days_back)
 
         end_timestamp = DateTimeUtil.timestamp()
         start_timestamp = end_timestamp - (days_back * 24 * 60 * 60)
 
         logger.info(
-            f'Getting integration events: {start_timestamp} to {end_timestamp}')
+            f'Fetching integration events: {start_timestamp} -> {end_timestamp}')
 
         # Fetch all devices to map onto the integration events
-        logger.info('Fetching devicesc')
+        logger.info('Fetching devices')
         devices = await self.__device_service.get_devices()
 
         # Get the integration events within the given date range
@@ -116,9 +117,11 @@ class NestIntegrationService:
         self,
         devices: list[NestSensorDevice],
         events: list[NestIntegrationEvent]
-    ):
+    ) -> pd.DataFrame:
+
         devices_df = pd.DataFrame([x.to_dict() for x in devices])
         devices_df = devices_df[['device_id', 'device_name']]
+
         events_df = pd.DataFrame([x.to_dict() for x in events])
 
         return events_df.merge(
@@ -166,7 +169,7 @@ class NestIntegrationService:
 
                 return HandleIntegrationEventResponse(
                     integration_event_type=event_type,
-                    result=IntegrationEventResult.MinimumIntervalNotMet,
+                    result=IntegrationEventResult.MinimumInterval,
                     message='The minimum interval has not passed since the last event')
 
         # Handle power cycle integration events
@@ -194,7 +197,7 @@ class NestIntegrationService:
         else:
             return HandleIntegrationEventResponse(
                 integration_event_type=event_type,
-                result=IntegrationEventResult.NoOp,
+                result=IntegrationEventResult.NoAction,
                 message=f'No action was taken for the event type: {event_type}')
 
     async def __handle_power_cycle_integration_event(
