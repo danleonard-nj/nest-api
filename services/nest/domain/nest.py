@@ -8,6 +8,13 @@ from framework.serialization import Serializable
 from domain.enums import NestCommand, NestCommandType, ThermostatMode
 from utils.utils import DateTimeUtil
 
+
+DEFAULT_SENSOR_UNHEALTHY_SECONDS = 90
+DEFAULT_PURGE_DAYS = 180
+ALERT_EMAIL_SUBJECT = 'Sensor Failure'
+PURGE_EMAIL_SUBJECT = 'Sensor Data Purge'
+EMAIL_ALERT_FEATURE_KEY = 'integration-event-email-notifications'
+
 NestCommandTypeMapping = {
     NestCommandType.SetPowerOff: NestCommand.SetMode,
     NestCommandType.SetMode: NestCommand.SetMode,
@@ -23,17 +30,6 @@ def to_fahrenheit(
     if celsius is None or celsius == 0:
         return 0
     return round((celsius * 9/5) + 32, 1)
-
-
-# class NestConfiguration:
-#     def __init_(
-#         self,
-#         data: Dict
-#     ):
-#         self.expiration_minutes = data.get('expiration_minutes')
-#         self.notification_recipients = data.get('notification_recipients')
-#         self.contacts = data.get('contacts')
-#         self.created_date = data.get('created_date')
 
 
 class NestThermostatMode:

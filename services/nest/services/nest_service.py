@@ -3,31 +3,27 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
 import pandas as pd
-from framework.clients.cache_client import CacheClientAsync
-from framework.clients.feature_client import FeatureClientAsync
-from framework.concurrency import TaskCollection
-from framework.configuration import Configuration
-from framework.logger import get_logger
-
 from clients.nest_client import NestClient
 from data.nest_history_repository import NestThermostatHistoryRepository
 from data.nest_sensor_repository import NestSensorRepository
 from domain.enums import Feature, HealthStatus, IntegrationEventType
-from domain.nest import (NestSensorData, NestSensorDevice, NestSensorReduced, NestThermostat,
-                         SensorHealthSummary, SensorHealthStats, SensorPollResult,
+from domain.nest import (ALERT_EMAIL_SUBJECT, DEFAULT_PURGE_DAYS,
+                         DEFAULT_SENSOR_UNHEALTHY_SECONDS, PURGE_EMAIL_SUBJECT,
+                         NestSensorData, NestSensorDevice, NestSensorReduced,
+                         NestThermostat, SensorHealthStats,
+                         SensorHealthSummary, SensorPollResult,
                          ThermostatHistory)
 from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
+from framework.clients.feature_client import FeatureClientAsync
+from framework.concurrency import TaskCollection
+from framework.configuration import Configuration
+from framework.logger import get_logger
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
 
 logger = get_logger(__name__)
-
-DEFAULT_SENSOR_UNHEALTHY_SECONDS = 90
-DEFAULT_PURGE_DAYS = 180
-ALERT_EMAIL_SUBJECT = 'Sensor Failure'
-PURGE_EMAIL_SUBJECT = 'Sensor Data Purge'
 
 
 class NestService:
@@ -40,27 +36,25 @@ class NestService:
         integration_service: NestIntegrationService,
         thermostat_repository: NestThermostatHistoryRepository,
         alert_service: AlertService,
-        cache_client: CacheClientAsync,
         feature_client: FeatureClientAsync
     ):
-        self.__thermostat_id = configuration.nest.get(
+        self._thermostat_id = configuration.nest.get(
             'thermostat_id')
-        self.__purge_days = configuration.nest.get(
+        self._purge_days = configuration.nest.get(
             'purge_days', DEFAULT_PURGE_DAYS)
 
-        self.__sensor_unhealthy_seconds = configuration.nest.get(
+        self._sensor_unhealthy_seconds = configuration.nest.get(
             'sensor_unhealthy_seconds', DEFAULT_SENSOR_UNHEALTHY_SECONDS)
-        self.__alert_recipient = configuration.nest.get(
+        self._alert_recipient = configuration.nest.get(
             'alert_recipient')
 
-        self.__nest_client = nest_client
-        self.__sensor_repository = sensor_repository
-        self.__device_service = device_service
-        self.__cache_client = cache_client
-        self.__integation_service = integration_service
-        self.__feature_client = feature_client
-        self.__alert_service = alert_service
-        self.__thermostat_repository = thermostat_repository
+        self._nest_client = nest_client
+        self._sensor_repository = sensor_repository
+        self._device_service = device_service
+        self._integation_service = integration_service
+        self._feature_client = feature_client
+        self._alert_service = alert_service
+        self._thermostat_repository = thermostat_repository
 
     async def handle_thermostat_history(
         self,
@@ -73,7 +67,7 @@ class NestService:
 
         logger.info(f'History: {history.to_dict()}')
 
-        await self.__thermostat_repository.insert(
+        await self._thermostat_repository.insert(
             document=history.to_dict())
 
         return history
@@ -100,12 +94,12 @@ class NestService:
         self
     ) -> NestThermostat:
 
-        data = await self.__nest_client.get_thermostat()
+        data = await self._nest_client.get_thermostat()
         logger.info(f'Nest thermostat data: {data}')
 
         thermostat = NestThermostat.from_json_object(
             data=data,
-            thermostat_id=self.__thermostat_id)
+            thermostat_id=self._thermostat_id)
 
         return thermostat
 
@@ -114,7 +108,7 @@ class NestService:
         sensor_request: NestSensorDataRequest
     ) -> NestSensorData:
 
-        sensor = await self.__device_service.get_device(
+        sensor = await self._device_service.get_device(
             device_id=sensor_request.sensor_id)
 
         if sensor is None:
@@ -132,7 +126,7 @@ class NestService:
             timestamp=DateTimeUtil.timestamp())
 
         # Write the new sensor data
-        result = await self.__sensor_repository.insert(
+        result = await self._sensor_repository.insert(
             document=sensor_data.to_dict())
 
         logger.info(
@@ -143,17 +137,17 @@ class NestService:
     async def purge_sensor_data(
         self
     ):
-        logger.info(f'Purging sensor data: {self.__purge_days} days back')
+        logger.info(f'Purging sensor data: {self._purge_days} days back')
 
         # Get the cutoff date and purge any records
         # that step over that line
         cutoff_date = datetime.utcnow() - timedelta(
-            days=self.__purge_days)
+            days=self._purge_days)
 
         cutoff_timestamp = int(cutoff_date.timestamp())
         logger.info(f'Cutoff timestamp: {cutoff_timestamp}')
 
-        result = await self.__sensor_repository.purge_records_before_cutoff(
+        result = await self._sensor_repository.purge_records_before_cutoff(
             cutoff_timestamp=cutoff_timestamp)
 
         logger.info(f'Deleted: {result.deleted_count}')
@@ -163,8 +157,8 @@ class NestService:
             deleted_count=result.deleted_count)
 
         # Send an alert email to notify the purge ran
-        await self.__alert_service.send_alert(
-            recipient=self.__alert_recipient,
+        await self._alert_service.send_alert(
+            recipient=self._alert_recipient,
             subject=PURGE_EMAIL_SUBJECT,
             body=alert_body)
 
@@ -185,14 +179,14 @@ class NestService:
 
         logger.info(f'Get sensor data: {start_timestamp}: {device_ids}')
 
-        devices = await self.__device_service.get_devices()
+        devices = await self._device_service.get_devices()
 
         if not any(device_ids):
             logger.info(f'No device IDs provided, using all devices')
             device_ids = [device.device_id for device in devices]
 
         logger.info(f'Fetching data for sensors: {device_ids}')
-        entities = await self.__sensor_repository.get_sensor_data_by_devices(
+        entities = await self._sensor_repository.get_sensor_data_by_devices(
             device_ids=device_ids,
             start_timestamp=start_timestamp)
 
@@ -236,7 +230,7 @@ class NestService:
         hours_back = int(hours_back)
         start_timestamp = now - (hours_back * 60 * 60)
 
-        entities = await self.__sensor_repository.get_by_device(
+        entities = await self._sensor_repository.get_by_device(
             device_id=sensor_id,
             start_timestamp=start_timestamp)
 
@@ -252,7 +246,7 @@ class NestService:
 
         logger.info(f'Getting top sensor record: {device_id}')
 
-        last_entity = await self.__sensor_repository.get_top_sensor_record(
+        last_entity = await self._sensor_repository.get_top_sensor_record(
             sensor_id=device_id)
 
         if last_entity is None:
@@ -262,11 +256,9 @@ class NestService:
         last_record = NestSensorData.from_entity(
             data=last_entity)
 
-        logger.info(f'Last sensor record: {last_record.to_dict()}')
-
         return last_record
 
-    def __get_health_status(
+    def _get_health_status(
         self,
         record: NestSensorData
     ) -> Tuple[str, int]:
@@ -278,7 +270,7 @@ class NestService:
         # Determine health status
         health_status = (
             HealthStatus.Unhealthy
-            if seconds_elapsed >= self.__sensor_unhealthy_seconds
+            if seconds_elapsed >= self._sensor_unhealthy_seconds
             else HealthStatus.Healthy
         )
 
@@ -294,7 +286,7 @@ class NestService:
     ) -> List[SensorHealthSummary]:
 
         logger.info(f'Getting sensor info')
-        devices = await self.__device_service.get_devices()
+        devices = await self._device_service.get_devices()
 
         device_health = list()
 
@@ -302,17 +294,14 @@ class NestService:
         async def handle_sensor_health_check(
             device: NestSensorDevice
         ) -> None:
-            logger.info(f'Calculating health stats: {device.device_id}')
-
             last_record = await self.__get_top_sensor_record(
                 device_id=device.device_id)
 
-            logger.info('Fetched last record successfully')
-
-            health_status, seconds_elapsed = self.__get_health_status(
+            health_status, seconds_elapsed = self._get_health_status(
                 record=last_record)
 
-            logger.info(f'Health status: {health_status}: {seconds_elapsed}s')
+            logger.info(
+                f'Health status: {device.device_id}: {health_status}: {seconds_elapsed}s')
 
             stats = SensorHealthStats(
                 status=health_status,
@@ -325,7 +314,6 @@ class NestService:
                 health=stats,
                 data=last_record)
 
-            logger.info(f'Health: {health.to_dict()}')
             device_health.append(health)
 
         # Fetch the sensor health info in parallel
@@ -371,18 +359,18 @@ class NestService:
             logger.info('Checking for sensor power cycle integration')
 
             # Check for sensor integrations like power cycling or fans
-            if self.__integation_service.is_device_integration_supported(
+            if self._integation_service.is_device_integration_supported(
                     device_id=sensor_health.device_id):
 
                 # Get device from cache/db
-                device = await self.__device_service.get_device(
+                device = await self._device_service.get_device(
                     device_id=sensor_health.device_id)
 
                 logger.info(
                     f'Attempting to power cycle device: {device.device_id}')
 
                 # Handle the sensor integration event
-                event_result = await self.__integation_service.handle_integration_event(
+                event_result = await self._integation_service.handle_integration_event(
                     device=device,
                     event_type=IntegrationEventType.PowerCycle)
 
@@ -392,7 +380,7 @@ class NestService:
             logger.info(
                 f'Sending unhealthy alert for device: {sensor_health.device_id}')
 
-            is_alert_enabled = await self.__feature_client.is_enabled(
+            is_alert_enabled = await self._feature_client.is_enabled(
                 feature_key=Feature.NestHealthCheckEmailAlerts)
             logger.info(f'Is sensor alert enabled: {is_alert_enabled}')
 
@@ -404,8 +392,8 @@ class NestService:
                     device=sensor_health,
                     elapsed_seconds=sensor_health.health.seconds_elapsed)
 
-                await self.__alert_service.send_alert(
-                    recipient=self.__alert_recipient,
+                await self._alert_service.send_alert(
+                    recipient=self._alert_recipient,
                     subject=f'{ALERT_EMAIL_SUBJECT}: {sensor_health.device_name}',
                     body=body)
 

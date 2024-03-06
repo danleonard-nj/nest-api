@@ -1,11 +1,11 @@
 
 import asyncio
-from framework.logger import get_logger
 
-from framework.clients.cache_client import CacheClientAsync
 from data.nest_sensor_repository import NestDeviceRepository
 from domain.cache import CacheKey
 from domain.nest import NestSensorDevice
+from framework.clients.cache_client import CacheClientAsync
+from framework.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -16,14 +16,14 @@ class NestDeviceService:
         device_repository: NestDeviceRepository,
         cache_client: CacheClientAsync
     ):
-        self.__device_repository = device_repository
-        self.__cache_client = cache_client
+        self._device_repository = device_repository
+        self._cache_client = cache_client
 
     async def get_devices_by_ids(
         self,
         device_ids: list
     ):
-        entities = await self.__device_repository.get_devices(
+        entities = await self._device_repository.get_devices(
             device_ids=device_ids)
 
         devices = [NestSensorDevice.from_entity(data=entity)
@@ -39,7 +39,7 @@ class NestDeviceService:
 
         logger.info(f'Get cached devices: {key}')
 
-        entities = await self.__cache_client.get_json(
+        entities = await self._cache_client.get_json(
             key=key)
 
         if entities is not None and any(entities):
@@ -51,11 +51,11 @@ class NestDeviceService:
 
         # Fetch devices from database
         logger.info(f'Fetching devices from database: {key}')
-        entities = await self.__device_repository.get_all()
+        entities = await self._device_repository.get_all()
 
         # Fire and forget the cache task
         asyncio.create_task(
-            self.__cache_client.set_json(
+            self._cache_client.set_json(
                 key=key,
                 value=entities))
 
@@ -71,7 +71,7 @@ class NestDeviceService:
 
         logger.info(f'Get cached device: {key}')
 
-        entity = await self.__cache_client.get_json(
+        entity = await self._cache_client.get_json(
             key=key)
 
         if entity is not None:
@@ -82,7 +82,7 @@ class NestDeviceService:
                 data=entity)
 
         # Fetch device from database
-        entity = await self.__device_repository.get({
+        entity = await self._device_repository.get({
             'device_id': device_id
         })
 
@@ -92,7 +92,7 @@ class NestDeviceService:
 
         # Fire and forget the cache task
         asyncio.create_task(
-            self.__cache_client.set_json(
+            self._cache_client.set_json(
                 key=key,
                 value=entity))
 

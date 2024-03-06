@@ -2,10 +2,6 @@ import asyncio
 import uuid
 
 import pandas as pd
-from framework.configuration import Configuration
-from framework.logger import get_logger
-from framework.validators.nulls import none_or_whitespace
-
 from clients.kasa_client import KasaClient
 from data.nest_integration_repository import NestIntegrationRepository
 from domain.enums import (IntegrationEventResult, IntegrationEventType,
@@ -13,9 +9,13 @@ from domain.enums import (IntegrationEventResult, IntegrationEventType,
 from domain.integration import (DeviceIntegrationConfig,
                                 DeviceIntegrationSceneMappingConfig,
                                 NestIntegrationEvent)
-from domain.nest import NestSensorDevice
+from domain.nest import EMAIL_ALERT_FEATURE_KEY, NestSensorDevice
 from domain.rest import (HandleIntegrationEventResponse,
                          IntegrationEventResponse)
+from framework.clients.feature_client import FeatureClientAsync
+from framework.configuration import Configuration
+from framework.logger import get_logger
+from framework.validators.nulls import none_or_whitespace
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from utils.helpers import parse
@@ -29,10 +29,10 @@ class NestIntegrationService:
     def integrations(
         self
     ):
-        if self.__integrations is None:
-            self.__integrations = self.__load_integration_lookup(
-                data=self.__configuration.kasa)
-        return self.__integrations
+        if self._integrations is None:
+            self._integrations = self._load_integration_lookup(
+                data=self._configuration.kasa)
+        return self._integrations
 
     def __init__(
         self,
@@ -40,13 +40,15 @@ class NestIntegrationService:
         integration_repository: NestIntegrationRepository,
         device_service: NestDeviceService,
         kasa_client: KasaClient,
-        alert_service: AlertService
+        alert_service: AlertService,
+        feature_client: FeatureClientAsync
     ):
-        self.__configuration = configuration
-        self.__integration_repository = integration_repository
-        self.__device_service = device_service
-        self.__kasa_client = kasa_client
-        self.__alert_service = alert_service
+        self._configuration = configuration
+        self._integration_repository = integration_repository
+        self._device_service = device_service
+        self._kasa_client = kasa_client
+        self._alert_service = alert_service
+        self._feature_client = feature_client
 
         self.__minimum_integration_interval = configuration.nest.get(
             'minimum_integration_interval')
@@ -55,7 +57,7 @@ class NestIntegrationService:
         self.__integration_power_cycle_seconds = configuration.nest.get(
             'integration_power_cycle_seconds')
 
-        self.__integrations = None
+        self._integrations = None
 
     def is_device_integration_supported(
         self,
@@ -79,10 +81,10 @@ class NestIntegrationService:
 
         # Fetch all devices to map onto the integration events
         logger.info('Fetching devices')
-        devices = await self.__device_service.get_devices()
+        devices = await self._device_service.get_devices()
 
         # Get the integration events within the given date range
-        entities = await self.__integration_repository.get_integration_events(
+        entities = await self._integration_repository.get_integration_events(
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
             sensor_id=sensor_id)
@@ -98,7 +100,7 @@ class NestIntegrationService:
 
             return list()
 
-        df = self.__merge_devices_on_events(
+        df = self._merge_devices_on_events(
             devices=devices,
             events=events)
 
@@ -113,7 +115,7 @@ class NestIntegrationService:
             for result in results
         ]
 
-    def __merge_devices_on_events(
+    def _merge_devices_on_events(
         self,
         devices: list[NestSensorDevice],
         events: list[NestIntegrationEvent]
@@ -145,7 +147,7 @@ class NestIntegrationService:
                 f"No integration config is defined for sensor with the ID '{sensor_id}'")
 
         # Get the latest integration event for the sensor
-        latest_event_entity = await self.__integration_repository.get_latest_integation_event_by_sensor(
+        latest_event_entity = await self._integration_repository.get_latest_integation_event_by_sensor(
             sensor_id=sensor_id)
 
         # If we have a stored integration event for the sensor
@@ -174,7 +176,7 @@ class NestIntegrationService:
 
         # Handle power cycle integration events
         if event_type == IntegrationEventType.PowerCycle:
-            power_cycle_result = await self.__handle_power_cycle_integration_event(
+            power_cycle_result = await self._handle_power_cycle_integration_event(
                 sensor=device,
                 integration_config=config,
                 integration_event_type=event_type)
@@ -187,10 +189,14 @@ class NestIntegrationService:
                 logger.info(
                     f'Sending alert for power cycle result: {power_cycle_result.result}')
 
-                await self.__send_intergration_event_alert(
-                    sensor=device,
-                    event_type=event_type,
-                    data=power_cycle_result.to_dict())
+                is_enabled = await self._feature_client.is_enabled(
+                    feature_name=EMAIL_ALERT_FEATURE_KEY)
+
+                if is_enabled:
+                    await self._send_intergration_event_alert(
+                        sensor=device,
+                        event_type=event_type,
+                        data=power_cycle_result.to_dict())
 
             return power_cycle_result
 
@@ -200,7 +206,7 @@ class NestIntegrationService:
                 result=IntegrationEventResult.NoAction,
                 message=f'No action was taken for the event type: {event_type}')
 
-    async def __handle_power_cycle_integration_event(
+    async def _handle_power_cycle_integration_event(
         self,
         sensor: NestSensorDevice,
         integration_config: DeviceIntegrationConfig,
@@ -265,7 +271,7 @@ class NestIntegrationService:
 
         try:
             # Send the request to run the power off scene
-            power_off_status, _ = await self.__kasa_client.run_scene(
+            power_off_status, _ = await self._kasa_client.run_scene(
                 scene_id=power_off)
             logger.info(f'Power off response: {power_off_status}')
 
@@ -289,7 +295,7 @@ class NestIntegrationService:
 
         try:
             # Send the request to run the power on scene
-            power_on_status, _ = await self.__kasa_client.run_scene(
+            power_on_status, _ = await self._kasa_client.run_scene(
                 scene_id=power_on)
             logger.info(f'Power on response: {power_on_status}')
 
@@ -314,7 +320,7 @@ class NestIntegrationService:
             result=IntegrationEventResult.Success,
             timestamp=DateTimeUtil.timestamp())
 
-        insert_result = await self.__integration_repository.insert(
+        insert_result = await self._integration_repository.insert(
             document=integration_event.to_dict())
 
         logger.info(
@@ -325,7 +331,7 @@ class NestIntegrationService:
             result=IntegrationEventResult.Success,
             message='The integration event was handled successfully')
 
-    async def __send_intergration_event_alert(
+    async def _send_intergration_event_alert(
         self,
         sensor: NestSensorDevice,
         event_type: IntegrationEventType,
@@ -339,12 +345,12 @@ class NestIntegrationService:
         for row in data:
             row['timestamp'] = DateTimeUtil.az_local()
 
-        await self.__alert_service.send_datatable_email(
+        await self._alert_service.send_datatable_email(
             recipient=self.__alert_recipient,
             subject=subject,
             data=data)
 
-    def __load_integration_lookup(
+    def _load_integration_lookup(
         self,
         data: dict
     ) -> dict[str, DeviceIntegrationConfig]:

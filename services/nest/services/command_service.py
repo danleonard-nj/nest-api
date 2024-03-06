@@ -1,10 +1,5 @@
 import asyncio
 
-from framework.clients.cache_client import CacheClientAsync
-from framework.configuration import Configuration
-from framework.logger import get_logger
-from framework.validators.nulls import none_or_whitespace
-
 from clients.nest_client import NestClient
 from domain.cache import CacheKey
 from domain.enums import NestCommandType, ThermostatMode
@@ -13,6 +8,10 @@ from domain.exceptions import (NestThermostatTemperatureException,
 from domain.nest import CommandListItem, NestCommandTypeMapping, NestThermostat
 from domain.rest import (NestCommandClientRequest, NestCommandHandlerResponse,
                          NestCommandRequest)
+from framework.clients.cache_client import CacheClientAsync
+from framework.configuration import Configuration
+from framework.logger import get_logger
+from framework.validators.nulls import none_or_whitespace
 from utils.utils import to_celsius
 
 logger = get_logger(__name__)
@@ -25,34 +24,34 @@ class NestCommandService:
         nest_client: NestClient,
         cache_client: CacheClientAsync
     ):
-        self.__thermostat_id = configuration.nest.get(
+        self._thermostat_id = configuration.nest.get(
             'thermostat_id')
 
-        self.__minimum_allowed_temperature = configuration.nest.get(
+        self._minimum_allowed_temperature = configuration.nest.get(
             'minimum_allowed_temperature')
-        self.__maximum_allowed_temperature = configuration.nest.get(
+        self._maximum_allowed_temperature = configuration.nest.get(
             'maximum_allowed_temperature')
 
-        self.__nest_client = nest_client
-        self.__cache_client = cache_client
+        self._nest_client = nest_client
+        self._cache_client = cache_client
 
-    async def __bust_thermostat_mode_cache(
+    async def _bust_thermostat_mode_cache(
         self
     ):
         key = CacheKey.active_thermostat_mode()
 
         logger.info(f'Busting thermostat mode cache: {key}')
-        await self.__cache_client.delete_key(
+        await self._cache_client.delete_key(
             key=key)
 
-    async def __get_active_thermostat_mode(
+    async def _get_active_thermostat_mode(
         self
     ):
         logger.info('Get thermostat mode')
 
         key = CacheKey.active_thermostat_mode()
 
-        cached_mode = await self.__cache_client.get_cache(
+        cached_mode = await self._cache_client.get_cache(
             key=key)
 
         if not none_or_whitespace(cached_mode):
@@ -61,17 +60,17 @@ class NestCommandService:
 
             return parsed_mode
 
-        data = await self.__nest_client.get_thermostat()
+        data = await self._nest_client.get_thermostat()
 
         thermostat = NestThermostat.from_json_object(
             data=data,
-            thermostat_id=self.__thermostat_id)
+            thermostat_id=self._thermostat_id)
 
         mode = thermostat.thermostat_mode
 
         # Cache the thermostat mode async
         asyncio.create_task(
-            self.__cache_client.set_cache(
+            self._cache_client.set_cache(
                 key=CacheKey.active_thermostat_mode(),
                 value=mode,
                 ttl=60 * 24))
@@ -82,7 +81,7 @@ class NestCommandService:
         self,
         command_request: NestCommandRequest
     ):
-        status = await self.__delegate_command(
+        status = await self._delegate_command(
             command_type=command_request.command_type,
             params=command_request.params)
 
@@ -96,14 +95,14 @@ class NestCommandService:
         mode: ThermostatMode,
         delay_seconds: int = 1
     ):
-        current_mode = await self.__get_active_thermostat_mode()
+        current_mode = await self._get_active_thermostat_mode()
 
         if current_mode == mode:
             logger.info(f'Thermostat mode is already set to {mode}')
             return
 
         asyncio.create_task(
-            self.__bust_thermostat_mode_cache())
+            self._bust_thermostat_mode_cache())
 
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetPowerOff],
@@ -112,7 +111,7 @@ class NestCommandService:
 
         logger.info(f'Set mode: {mode}: {command.to_dict()}')
 
-        result = await self.__nest_client.execute_command(
+        result = await self._nest_client.execute_command(
             command=command.to_dict())
 
         logger.info(f'Result: {result}')
@@ -133,9 +132,9 @@ class NestCommandService:
         logger.info(f'Set heat: {params}')
         heat_degrees_fahrenheit = params.get('heat_degrees_fahrenheit')
 
-        if heat_degrees_fahrenheit > self.__maximum_allowed_temperature:
+        if heat_degrees_fahrenheit > self._maximum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Heat degrees: {heat_degrees_fahrenheit}: exceeds maximum temp: {self.__maximum_allowed_temperature}')
+                f'Heat degrees: {heat_degrees_fahrenheit}: exceeds maximum temp: {self._maximum_allowed_temperature}')
 
         # Set the thermostat mode to heat
         logger.info('Setting thermostat mode to heat')
@@ -149,7 +148,7 @@ class NestCommandService:
         )
 
         logger.info(f'Command: {command.to_dict()}')
-        return await self.__nest_client.execute_command(
+        return await self._nest_client.execute_command(
             command=command.to_dict())
 
     async def set_cool(
@@ -161,9 +160,9 @@ class NestCommandService:
         cool_degrees_fahrenheit = params.get(
             'cool_degrees_fahrenheit')
 
-        if cool_degrees_fahrenheit < self.__minimum_allowed_temperature:
+        if cool_degrees_fahrenheit < self._minimum_allowed_temperature:
             logger.info(
-                f'Cool degrees: {cool_degrees_fahrenheit}: exceeds minimum temp: {self.__minimum_allowed_temperature}')
+                f'Cool degrees: {cool_degrees_fahrenheit}: exceeds minimum temp: {self._minimum_allowed_temperature}')
 
             raise Exception('Too cold!')
 
@@ -179,7 +178,7 @@ class NestCommandService:
         )
 
         logger.info(f'Command: {command.to_dict()}')
-        return await self.__nest_client.execute_command(
+        return await self._nest_client.execute_command(
             command=command.to_dict())
 
     async def set_range(
@@ -190,13 +189,13 @@ class NestCommandService:
         heat_degrees_fahrenheit = params.get('heat_degrees_fahrenheit')
         cool_degrees_fahrenheit = params.get('cool_degrees_fahrenheit')
 
-        if heat_degrees_fahrenheit > self.__maximum_allowed_temperature:
+        if heat_degrees_fahrenheit > self._maximum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Temperature exceeds safety maximum of {self.__maximum_allowed_temperature} degrees fahrenheit')
+                f'Temperature exceeds safety maximum of {self._maximum_allowed_temperature} degrees fahrenheit')
 
-        if cool_degrees_fahrenheit < self.__minimum_allowed_temperature:
+        if cool_degrees_fahrenheit < self._minimum_allowed_temperature:
             raise NestThermostatTemperatureException(
-                f'Temperature falls below safety minimum of {self.__minimum_allowed_temperature} degrees fahrenheit')
+                f'Temperature falls below safety minimum of {self._minimum_allowed_temperature} degrees fahrenheit')
 
         # Set the thermostat mode to range
         await self.set_thermostat_mode(
@@ -210,7 +209,7 @@ class NestCommandService:
         )
 
         logger.info(f'Set range: {command.to_dict()}')
-        return await self.__nest_client.execute_command(
+        return await self._nest_client.execute_command(
             command=command.to_dict())
 
     async def set_power_off(
@@ -238,7 +237,7 @@ class NestCommandService:
 
         return commands
 
-    async def __delegate_command(
+    async def _delegate_command(
         self,
         command_type: NestCommandType,
         params: dict
