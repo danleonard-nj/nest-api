@@ -1,4 +1,4 @@
-framework==0.2.8
+framework==0.3.6
 pymongo
 azure-servicebus
 swagger-gen
