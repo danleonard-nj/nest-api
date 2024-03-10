@@ -1,8 +1,7 @@
 from collections.abc import Iterable
 
-from framework.logger import get_logger
-
 from clients.email_gateway_client import EmailGatewayClient
+from framework.logger import get_logger
 from services.event_service import EventService
 
 logger = get_logger(__name__)
@@ -14,8 +13,8 @@ class AlertService:
         email_client: EmailGatewayClient,
         event_service: EventService
     ):
-        self.__email_client = email_client
-        self.__event_service = event_service
+        self._email_client = email_client
+        self._event_service = event_service
 
     async def send_alert(
         self,
@@ -24,7 +23,7 @@ class AlertService:
         body: str
     ) -> None:
 
-        email_request, endpoint = self.__email_client.get_email_event_request(
+        email_request, endpoint = self._email_client.get_email_event_request(
             recipient=recipient,
             subject=subject,
             body=body)
@@ -32,7 +31,7 @@ class AlertService:
         logger.info(
             f'Dispatching email event message: {email_request.to_dict()}')
 
-        await self.__event_service.dispatch_email_event(
+        await self._event_service.dispatch_email_event(
             endpoint=endpoint,
             message=email_request.to_dict())
 
@@ -46,7 +45,7 @@ class AlertService:
         if not isinstance(data, Iterable):
             data = [data]
 
-        email_request, endpoint = self.__email_client.get_datatable_email_request(
+        email_request, endpoint = self._email_client.get_datatable_email_request(
             recipient=recipient,
             subject=subject,
             data=data)
@@ -54,6 +53,6 @@ class AlertService:
         logger.info(f'Sending email alert: {email_request.to_dict()}')
         logger.info(f'Endpoint: {endpoint}')
 
-        await self.__event_service.dispatch_email_event(
+        await self._event_service.dispatch_email_event(
             endpoint=endpoint,
             message=email_request.to_dict())

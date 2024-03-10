@@ -239,12 +239,10 @@ class NestService:
 
         return data
 
-    async def __get_top_sensor_record(
+    async def _get_top_sensor_record(
         self,
         device_id: str
     ) -> NestSensorData | None:
-
-        logger.info(f'Getting top sensor record: {device_id}')
 
         last_entity = await self._sensor_repository.get_top_sensor_record(
             sensor_id=device_id)
@@ -294,7 +292,7 @@ class NestService:
         async def handle_sensor_health_check(
             device: NestSensorDevice
         ) -> None:
-            last_record = await self.__get_top_sensor_record(
+            last_record = await self._get_top_sensor_record(
                 device_id=device.device_id)
 
             health_status, seconds_elapsed = self._get_health_status(

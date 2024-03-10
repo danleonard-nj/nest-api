@@ -22,18 +22,18 @@ class NestClient:
         cache_client: CacheClientAsync
 
     ):
-        self.__base_url = configuration.nest.get('base_url')
-        self.__token_url = configuration.nest.get('token_url')
+        self._base_url = configuration.nest.get('base_url')
+        self._token_url = configuration.nest.get('token_url')
 
-        self.__device_id = configuration.nest.get('thermostat_id')
-        self.__project_id = configuration.nest.get('project_id')
+        self._device_id = configuration.nest.get('thermostat_id')
+        self._project_id = configuration.nest.get('project_id')
 
-        self.__client_id = configuration.nest.get('client_id')
-        self.__client_secret = configuration.nest.get('client_secret')
-        self.__refresh_token = configuration.nest.get('refresh_token')
+        self._client_id = configuration.nest.get('client_id')
+        self._client_secret = configuration.nest.get('client_secret')
+        self._refresh_token = configuration.nest.get('refresh_token')
 
-        self.__http_client = http_client
-        self.__cache_client = cache_client
+        self._http_client = http_client
+        self._cache_client = cache_client
 
     async def get_token(
         self
@@ -42,7 +42,7 @@ class NestClient:
 
         logger.info(f'Nest auth token key: {key}')
 
-        token = await self.__cache_client.get_cache(
+        token = await self._cache_client.get_cache(
             key=key)
 
         if not none_or_whitespace(token):
@@ -50,11 +50,11 @@ class NestClient:
             return token
 
         logger.info(f'Fetching token from auth client')
-        token = await self.__fetch_token()
+        token = await self._fetch_token()
 
         # Cache the Nest auth token
         asyncio.create_task(
-            self.__cache_client.set_cache(
+            self._cache_client.set_cache(
                 key=key,
                 value=token,
                 ttl=60))
@@ -64,15 +64,15 @@ class NestClient:
 
     async def get_thermostat(
         self
-    ) -> Dict:
-        headers = await self.__get_headers()
+    ) -> dict:
+        headers = await self._get_headers()
 
-        logger.info(f'Getting thermostat: {self.__device_id}')
+        logger.info(f'Getting thermostat: {self._device_id}')
 
-        endpoint = f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}'
+        endpoint = f'{self._base_url}/v1/enterprises/{self._project_id}/devices/{self._device_id}'
         logger.info(f'Endpoint: {endpoint}')
 
-        response = await self.__http_client.get(
+        response = await self._http_client.get(
             url=endpoint,
             headers=headers)
 
@@ -81,15 +81,15 @@ class NestClient:
 
     async def execute_command(
         self,
-        command: Dict
+        command: dict
     ):
         logger.info(f'Executing command: {command}')
-        headers = await self.__get_headers()
+        headers = await self._get_headers()
 
-        endpoint = f'{self.__base_url}/v1/enterprises/{self.__project_id}/devices/{self.__device_id}:executeCommand'
+        endpoint = f'{self._base_url}/v1/enterprises/{self._project_id}/devices/{self._device_id}:executeCommand'
         logger.info(f'Endpoint: {endpoint}')
 
-        response = await self.__http_client.post(
+        response = await self._http_client.post(
             url=endpoint,
             headers=headers,
             json=command)
@@ -98,7 +98,7 @@ class NestClient:
 
         return response.json()
 
-    async def __get_headers(
+    async def _get_headers(
         self
     ) -> Dict:
 
@@ -108,17 +108,17 @@ class NestClient:
             'Authorization': f'Bearer {token}'
         }
 
-    async def __fetch_token(
+    async def _fetch_token(
         self
     ):
         payload = AuthorizationRequest(
-            client_id=self.__client_id,
-            client_secret=self.__client_secret,
+            client_id=self._client_id,
+            client_secret=self._client_secret,
             grant_type='refresh_token',
-            refresh_token=self.__refresh_token)
+            refresh_token=self._refresh_token)
 
-        response = await self.__http_client.post(
-            url=self.__token_url,
+        response = await self._http_client.post(
+            url=self._token_url,
             data=payload.to_dict())
 
         if not response.is_success:

@@ -26,19 +26,19 @@ class IdentityClient:
         ArgumentNullException.if_none(configuration, 'configuration')
         ArgumentNullException.if_none(cache_client, 'cache_client')
 
-        self.__azure_ad = configuration.ad_auth
-        self.__http_client = http_client
-        self.__cache_client = cache_client
+        self._azure_ad = configuration.ad_auth
+        self._http_client = http_client
+        self._cache_client = cache_client
 
-        self.__register_clients()
+        self._register_clients()
 
-    def __register_clients(
+    def _register_clients(
         self
     ):
         logger.info(f'Registering auth client credential configs')
 
         self.__clients = dict()
-        for client in self.__azure_ad.clients:
+        for client in self._azure_ad.clients:
             self.add_client(client)
 
     def add_client(
@@ -73,7 +73,7 @@ class IdentityClient:
 
         logger.info(f'Auth token cache key: {cache_key}')
 
-        cached_token = await self.__cache_client.get_cache(
+        cached_token = await self._cache_client.get_cache(
             key=cache_key)
 
         # Return cached token
@@ -96,8 +96,8 @@ class IdentityClient:
                 'scope': scope
             }
 
-        response = await self.__http_client.post(
-            url=self.__azure_ad.identity_url,
+        response = await self._http_client.post(
+            url=self._azure_ad.identity_url,
             data=client_credentials)
 
         logger.info(
@@ -119,7 +119,7 @@ class IdentityClient:
         logger.info(f'Token fetched from client: {token}')
 
         asyncio.create_task(
-            self.__cache_client.set_cache(
+            self._cache_client.set_cache(
                 key=cache_key,
                 value=token,
                 ttl=60))
