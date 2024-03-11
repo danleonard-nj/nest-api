@@ -40,6 +40,10 @@ def configure_azure_ad(container):
         name=AuthPolicy.Default,
         func=lambda t: True)
 
+    azure_ad.add_authorization_policy(
+        name=AuthPolicy.Read,
+        func=lambda t: 'Nest.Read' in t.get('roles', []))
+
     # TODO: Remove default auth policy
 
     return azure_ad

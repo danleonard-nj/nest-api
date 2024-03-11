@@ -50,7 +50,7 @@ class NestIntegrationService:
         self._alert_service = alert_service
         self._feature_client = feature_client
 
-        self._minimum_integradtion_interval = configuration.nest.get(
+        self._minimum_integration_interval = configuration.nest.get(
             'minimum_integration_interval')
         self._alert_recipient = configuration.nest.get(
             'alert_recipient')

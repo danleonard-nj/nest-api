@@ -152,7 +152,7 @@ class NestService:
 
         logger.info(f'Deleted: {result.deleted_count}')
 
-        alert_body = self.__get_email_message_body(
+        alert_body = self._get_email_message_body(
             cutoff_date=cutoff_date,
             deleted_count=result.deleted_count)
 
@@ -413,7 +413,7 @@ class NestService:
 
         return msg
 
-    def __get_email_message_body(
+    def _get_email_message_body(
         self,
         cutoff_date: datetime,
         deleted_count: int
