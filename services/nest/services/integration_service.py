@@ -50,11 +50,11 @@ class NestIntegrationService:
         self._alert_service = alert_service
         self._feature_client = feature_client
 
-        self.__minimum_integration_interval = configuration.nest.get(
+        self._minimum_integradtion_interval = configuration.nest.get(
             'minimum_integration_interval')
-        self.__alert_recipient = configuration.nest.get(
+        self._alert_recipient = configuration.nest.get(
             'alert_recipient')
-        self.__integration_power_cycle_seconds = configuration.nest.get(
+        self._integration_power_cycle_seconds = configuration.nest.get(
             'integration_power_cycle_seconds')
 
         self._integrations = None
@@ -164,10 +164,10 @@ class NestIntegrationService:
             # If the minimum interval hasn't been met since the
             # last integration event
             if (now - latest_event.timestamp <
-                    (self.__minimum_integration_interval * 60)):
+                    (self._minimum_integration_interval * 60)):
 
                 logger.info(
-                    f"Minimum interval of '{self.__minimum_integration_interval}' minutes has not passed since the last event")
+                    f"Minimum interval of '{self._minimum_integration_interval}' minutes has not passed since the last event")
 
                 return HandleIntegrationEventResponse(
                     integration_event_type=event_type,
@@ -190,7 +190,7 @@ class NestIntegrationService:
                     f'Sending alert for power cycle result: {power_cycle_result.result}')
 
                 is_enabled = await self._feature_client.is_enabled(
-                    feature_name=EMAIL_ALERT_FEATURE_KEY)
+                    feature_key=EMAIL_ALERT_FEATURE_KEY)
 
                 if is_enabled:
                     await self._send_intergration_event_alert(
@@ -290,8 +290,8 @@ class NestIntegrationService:
                 message=f'An error occurred while sending the request to run the power off scene: {str(ex)}')
 
         logger.info(
-            f'Sleeping for cycle interval {self.__integration_power_cycle_seconds} seconds')
-        await asyncio.sleep(self.__integration_power_cycle_seconds)
+            f'Sleeping for cycle interval {self._integration_power_cycle_seconds} seconds')
+        await asyncio.sleep(self._integration_power_cycle_seconds)
 
         try:
             # Send the request to run the power on scene
@@ -346,7 +346,7 @@ class NestIntegrationService:
             row['timestamp'] = DateTimeUtil.az_local()
 
         await self._alert_service.send_datatable_email(
-            recipient=self.__alert_recipient,
+            recipient=self._alert_recipient,
             subject=subject,
             data=data)
 
