@@ -211,7 +211,7 @@ class NestThermostat(Serializable):
         return result
 
     @classmethod
-    def from_json_object(
+    def from_response(
         cls,
         data: Dict,
         thermostat_id: str
@@ -500,6 +500,7 @@ class ThermostatHistory(Serializable):
             target_temp = (thermostat.heat_fahrenheit,
                            thermostat.cool_fahrenheit)
 
+        # TODO: Does this need to be handled?
         elif thermostat.thermostat_mode == ThermostatMode.Off:
             if thermostat.cool_fahrenheit > 0:
                 target_temp = thermostat.cool_fahrenheit

@@ -12,7 +12,7 @@ from framework.clients.cache_client import CacheClientAsync
 from framework.configuration import Configuration
 from framework.logger import get_logger
 from framework.validators.nulls import none_or_whitespace
-from utils.utils import to_celsius
+from utils.utils import fire_task, to_celsius
 
 logger = get_logger(__name__)
 
@@ -55,21 +55,18 @@ class NestCommandService:
             key=key)
 
         if not none_or_whitespace(cached_mode):
-            parsed_mode = ThermostatMode(cached_mode)
-            logger.info(f'Returning cached thermostat mode: {parsed_mode}')
-
-            return parsed_mode
+            return ThermostatMode(cached_mode)
 
         data = await self._nest_client.get_thermostat()
 
-        thermostat = NestThermostat.from_json_object(
+        thermostat = NestThermostat.from_response(
             data=data,
             thermostat_id=self._thermostat_id)
 
         mode = thermostat.thermostat_mode
 
         # Cache the thermostat mode async
-        asyncio.create_task(
+        fire_task(
             self._cache_client.set_cache(
                 key=CacheKey.active_thermostat_mode(),
                 value=mode,
@@ -101,13 +98,11 @@ class NestCommandService:
             logger.info(f'Thermostat mode is already set to {mode}')
             return
 
-        asyncio.create_task(
-            self._bust_thermostat_mode_cache())
+        fire_task(self._bust_thermostat_mode_cache())
 
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetPowerOff],
-            mode=mode.value
-        )
+            mode=mode.value)
 
         logger.info(f'Set mode: {mode}: {command.to_dict()}')
 
@@ -144,8 +139,7 @@ class NestCommandService:
         # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetHeat],
-            heatCelsius=to_celsius(heat_degrees_fahrenheit)
-        )
+            heatCelsius=to_celsius(heat_degrees_fahrenheit))
 
         logger.info(f'Command: {command.to_dict()}')
         return await self._nest_client.execute_command(
@@ -157,8 +151,7 @@ class NestCommandService:
     ) -> dict:
 
         logger.info(f'Set cool: {params}')
-        cool_degrees_fahrenheit = params.get(
-            'cool_degrees_fahrenheit')
+        cool_degrees_fahrenheit = params.get('cool_degrees_fahrenheit')
 
         if cool_degrees_fahrenheit < self._minimum_allowed_temperature:
             logger.info(
@@ -174,8 +167,7 @@ class NestCommandService:
         # Generate the command
         command = NestCommandClientRequest(
             command=NestCommandTypeMapping[NestCommandType.SetCool],
-            coolCelsius=to_celsius(cool_degrees_fahrenheit)
-        )
+            coolCelsius=to_celsius(cool_degrees_fahrenheit))
 
         logger.info(f'Command: {command.to_dict()}')
         return await self._nest_client.execute_command(
@@ -226,16 +218,12 @@ class NestCommandService:
     ) -> list[CommandListItem]:
         logger.info(f'Listing commands')
 
-        commands = []
-        for command in NestCommandType:
-
-            value = CommandListItem(
+        return [
+            CommandListItem(
                 command=command.name,
                 key=command.value)
-
-            commands.append(value)
-
-        return commands
+            for command in NestCommandType
+        ]
 
     async def _delegate_command(
         self,

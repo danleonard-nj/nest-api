@@ -7,7 +7,7 @@ from domain.enums import (IntegrationEventResult, IntegrationEventType,
 from utils.helpers import parse
 
 
-class DeviceIntegrationSceneMappingConfig(Serializable):
+class DeviceIntegrationSceneMapping(Serializable):
     def __init__(
         self,
         device_type: Union[IntergationDeviceType, str],
@@ -19,10 +19,10 @@ class DeviceIntegrationSceneMappingConfig(Serializable):
             enum_type=IntergationDeviceType)
 
     @staticmethod
-    def from_json_object(
+    def from_config(
         data: Dict
     ):
-        return DeviceIntegrationSceneMappingConfig(
+        return DeviceIntegrationSceneMapping(
             device_type=data.get('device_type'),
             scenes=data.get('scenes'))
 
@@ -60,11 +60,8 @@ class DeviceIntegrationConfig:
         integration_type: Union[IntergationDeviceType, str]
     ):
         for integration in self.integrations:
-            device_type = integration.get('device_type')
-
-            if device_type == str(integration_type):
+            if integration.get('device_type') == str(integration_type):
                 return True
-
         return False
 
     def get_integration_data(
@@ -73,11 +70,8 @@ class DeviceIntegrationConfig:
     ) -> Union[Dict, None]:
 
         for integration in self.integrations:
-            device_type = integration.get('device_type')
-
-            if device_type == str(integration_device_type):
+            if integration.get('device_type') == str(integration_device_type):
                 return integration
-
         return None
 
 

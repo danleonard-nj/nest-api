@@ -7,7 +7,7 @@ from data.nest_integration_repository import NestIntegrationRepository
 from domain.enums import (IntegrationEventResult, IntegrationEventType,
                           IntergationDeviceType, KasaIntegrationSceneType)
 from domain.integration import (DeviceIntegrationConfig,
-                                DeviceIntegrationSceneMappingConfig,
+                                DeviceIntegrationSceneMapping,
                                 NestIntegrationEvent)
 from domain.nest import EMAIL_ALERT_FEATURE_KEY, NestSensorDevice
 from domain.rest import (HandleIntegrationEventResponse,
@@ -18,6 +18,7 @@ from framework.logger import get_logger
 from framework.validators.nulls import none_or_whitespace
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
+from framework.concurrency import TaskCollection
 from utils.helpers import parse
 from utils.utils import DateTimeUtil
 
@@ -71,23 +72,17 @@ class NestIntegrationService:
         sensor_id: str = None
     ) -> list[IntegrationEventResponse]:
 
-        days_back = int(days_back)
-
         end_timestamp = DateTimeUtil.timestamp()
-        start_timestamp = end_timestamp - (days_back * 24 * 60 * 60)
+        start_timestamp = end_timestamp - (int(days_back) * 24 * 60 * 60)
 
-        logger.info(
-            f'Fetching integration events: {start_timestamp} -> {end_timestamp}')
+        logger.info(f'Fetching integration events: {start_timestamp} -> {end_timestamp}')
 
-        # Fetch all devices to map onto the integration events
-        logger.info('Fetching devices')
-        devices = await self._device_service.get_devices()
-
-        # Get the integration events within the given date range
-        entities = await self._integration_repository.get_integration_events(
-            start_timestamp=start_timestamp,
-            end_timestamp=end_timestamp,
-            sensor_id=sensor_id)
+        devices, entities = await TaskCollection(
+            self._device_service.get_devices(),
+            self._integration_repository.get_integration_events(
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp,
+                sensor_id=sensor_id)).run()
 
         logger.info(f'Integration events fetched: {len(entities)}')
 
@@ -95,9 +90,7 @@ class NestIntegrationService:
                   for entity in entities]
 
         if not any(events):
-            logger.info(
-                f'No events found in range: {start_timestamp} to {end_timestamp}')
-
+            logger.info(f'No events found in range: {start_timestamp} to {end_timestamp}')
             return list()
 
         df = self._merge_devices_on_events(
@@ -108,12 +101,8 @@ class NestIntegrationService:
             by='timestamp',
             ascending=False)
 
-        results = df.to_dict(orient='records')
-
-        return [
-            IntegrationEventResponse.from_dict(data=result)
-            for result in results
-        ]
+        return [IntegrationEventResponse.from_dict(data=result)
+                for result in df.to_dict(orient='records')]
 
     def _merge_devices_on_events(
         self,
@@ -233,7 +222,7 @@ class NestIntegrationService:
             integration_device_type=IntergationDeviceType.Plug)
 
         # Build the config object for the device integration
-        mapping = DeviceIntegrationSceneMappingConfig.from_json_object(
+        mapping = DeviceIntegrationSceneMapping.from_config(
             data=integration)
 
         logger.info(f'Integration mapping: {mapping.to_dict()}')
@@ -289,8 +278,8 @@ class NestIntegrationService:
                 result=IntegrationEventResult.Error,
                 message=f'An error occurred while sending the request to run the power off scene: {str(ex)}')
 
-        logger.info(
-            f'Sleeping for cycle interval {self._integration_power_cycle_seconds} seconds')
+        logger.info(f'Sleeping {self._integration_power_cycle_seconds} seconds')
+
         await asyncio.sleep(self._integration_power_cycle_seconds)
 
         try:
@@ -356,15 +345,14 @@ class NestIntegrationService:
     ) -> dict[str, DeviceIntegrationConfig]:
 
         devices = data.get('devices', list())
+
         logger.info(f'Loading device integrations: {devices}')
 
         integrations = [DeviceIntegrationConfig.from_json_object(data=device)
                         for device in devices]
 
-        lookup = {
-            di.sensor_id: di for di in integrations
-        }
-
         logger.info(f'{len(integrations)} devices intergration configs loaded')
 
-        return lookup
+        return {
+            di.sensor_id: di for di in integrations
+        }

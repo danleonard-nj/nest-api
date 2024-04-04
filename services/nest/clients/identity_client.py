@@ -1,6 +1,4 @@
-import asyncio
 from typing import Dict
-
 from framework.clients.cache_client import CacheClientAsync
 from framework.configuration.configuration import Configuration
 from framework.exceptions.nulls import ArgumentNullException
@@ -12,6 +10,7 @@ from domain.auth import AuthClientConfig
 from domain.cache import CacheKey
 from domain.exceptions import (AuthClientNotFoundException,
                                AuthTokenFailureException)
+from utils.utils import fire_task
 
 logger = get_logger(__name__)
 
@@ -29,6 +28,7 @@ class IdentityClient:
         self._azure_ad = configuration.ad_auth
         self._http_client = http_client
         self._cache_client = cache_client
+        self._clients = dict()
 
         self._register_clients()
 
@@ -37,7 +37,7 @@ class IdentityClient:
     ):
         logger.info(f'Registering auth client credential configs')
 
-        self.__clients = dict()
+        self._clients = dict()
         for client in self._azure_ad.clients:
             self.add_client(client)
 
@@ -53,7 +53,7 @@ class IdentityClient:
             data=config)
 
         # Register the auth client credentials
-        self.__clients.update({
+        self._clients.update({
             client_name: auth_client.to_dict()
         })
 
@@ -78,12 +78,11 @@ class IdentityClient:
 
         # Return cached token
         if not none_or_whitespace(cached_token):
-            logger.info(
-                f'Cached token token for client: {client_name}: {cache_key}')
+            logger.info(f'Cached token token for client: {client_name}: {cache_key}')
             return cached_token
 
         # Get the client credential request config
-        client_credentials = self.__clients.get(client_name)
+        client_credentials = self._clients.get(client_name)
 
         if client_credentials is None:
             raise AuthClientNotFoundException(
@@ -100,13 +99,11 @@ class IdentityClient:
             url=self._azure_ad.identity_url,
             data=client_credentials)
 
-        logger.info(
-            f'Client token status: {client_name}: {response.status_code}')
+        logger.info(f'Client token status: {client_name}: {response.status_code}')
 
         # Handle failure to fetch
         if response.is_error:
-            logger.info(
-                f'Auth token failure for client: {client_name}: {scope}')
+            logger.info(f'Auth token failure for client: {client_name}: {scope}')
 
             raise AuthTokenFailureException(
                 client_name=client_name,
@@ -118,7 +115,7 @@ class IdentityClient:
 
         logger.info(f'Token fetched from client: {token}')
 
-        asyncio.create_task(
+        fire_task(
             self._cache_client.set_cache(
                 key=cache_key,
                 value=token,

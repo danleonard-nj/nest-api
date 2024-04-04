@@ -1,11 +1,9 @@
-
-import asyncio
-
 from data.nest_sensor_repository import NestDeviceRepository
 from domain.cache import CacheKey
 from domain.nest import NestSensorDevice
 from framework.clients.cache_client import CacheClientAsync
 from framework.logger import get_logger
+from utils.utils import fire_task
 
 logger = get_logger(__name__)
 
@@ -54,7 +52,7 @@ class NestDeviceService:
         entities = await self._device_repository.get_all()
 
         # Fire and forget the cache task
-        asyncio.create_task(
+        fire_task(
             self._cache_client.set_json(
                 key=key,
                 value=entities))
@@ -91,7 +89,7 @@ class NestDeviceService:
             raise Exception(f'No device found for sensor_id: {device_id}')
 
         # Fire and forget the cache task
-        asyncio.create_task(
+        fire_task(
             self._cache_client.set_json(
                 key=key,
                 value=entity))

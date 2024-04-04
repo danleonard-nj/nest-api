@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -5,6 +6,10 @@ import math
 import time
 from typing import Union
 import uuid
+
+
+def fire_task(coro):
+    asyncio.create_task(coro)
 
 
 class DateTimeUtil:

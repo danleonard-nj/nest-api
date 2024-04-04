@@ -29,10 +29,10 @@ class AuthClientConfig(Serializable):
         self.grant_type = data.get(
             'grant_type', self.DefaultGrantType)
 
-        self.scopes = self.__parse_scopes(
+        self.scopes = self._parse_scopes(
             scopes=data.get('scopes', list()))
 
-    def __parse_scopes(
+    def _parse_scopes(
         self,
         scopes: List[str]
     ) -> str:

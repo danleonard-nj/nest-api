@@ -105,3 +105,51 @@ class GetDevicesQuery(Queryable):
         }
 
         return query_filter
+
+
+class GetLatestIntegrationEventBySensorQuery(Queryable):
+    def __init__(
+        self,
+        sensor_id: str
+    ):
+        self.sensor_id = sensor_id
+
+    def get_query(
+        self
+    ) -> dict[str, any]:
+        query_filter = {
+            'sensor_id': self.sensor_id
+        }
+
+        return query_filter
+
+    def get_sort(
+        self
+    ) -> list[tuple[str, int]]:
+
+        return [('timestamp', -1)]
+
+
+class GetIntegarationEventsQuery(Queryable):
+    def __init__(
+        self,
+        start_timestamp: int,
+        end_timestamp: int,
+        sensor_id: str = None
+    ):
+        self.start_timestamp = start_timestamp
+        self.end_timestamp = end_timestamp
+        self.sensor_id = sensor_id
+
+    def get_query(self) -> dict[str, any]:
+        query_filter = {
+            'timestamp': {
+                '$gt': self.start_timestamp,
+                '$lte': self.end_timestamp
+            }
+        }
+
+        if self.sensor_id is not None:
+            query_filter['sensor_id'] = self.sensor_id
+
+        return query_filter

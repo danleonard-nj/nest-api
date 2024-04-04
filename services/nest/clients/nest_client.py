@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from domain.cache import CacheKey
 from domain.exceptions import NestAuthorizationFailureException
 from domain.rest import AuthorizationRequest
+from utils.utils import fire_task
 
 logger = get_logger(__name__)
 
@@ -37,7 +38,7 @@ class NestClient:
 
     async def get_token(
         self
-    ):
+    ) -> str:
         key = CacheKey.google_nest_auth_token()
 
         logger.info(f'Nest auth token key: {key}')
@@ -53,7 +54,7 @@ class NestClient:
         token = await self._fetch_token()
 
         # Cache the Nest auth token
-        asyncio.create_task(
+        fire_task(
             self._cache_client.set_cache(
                 key=key,
                 value=token,
@@ -65,9 +66,9 @@ class NestClient:
     async def get_thermostat(
         self
     ) -> dict:
-        headers = await self._get_headers()
 
         logger.info(f'Getting thermostat: {self._device_id}')
+        headers = await self._get_headers()
 
         endpoint = f'{self._base_url}/v1/enterprises/{self._project_id}/devices/{self._device_id}'
         logger.info(f'Endpoint: {endpoint}')
@@ -82,7 +83,8 @@ class NestClient:
     async def execute_command(
         self,
         command: dict
-    ):
+    ) -> dict:
+
         logger.info(f'Executing command: {command}')
         headers = await self._get_headers()
 
@@ -100,7 +102,7 @@ class NestClient:
 
     async def _get_headers(
         self
-    ) -> Dict:
+    ) -> dict:
 
         token = await self.get_token()
 
@@ -110,7 +112,8 @@ class NestClient:
 
     async def _fetch_token(
         self
-    ):
+    ) -> str:
+
         payload = AuthorizationRequest(
             client_id=self._client_id,
             client_secret=self._client_secret,

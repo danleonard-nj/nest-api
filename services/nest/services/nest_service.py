@@ -22,6 +22,7 @@ from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
+from datetime import UTC
 
 logger = get_logger(__name__)
 
@@ -97,7 +98,7 @@ class NestService:
         data = await self._nest_client.get_thermostat()
         logger.info(f'Nest thermostat data: {data}')
 
-        thermostat = NestThermostat.from_json_object(
+        thermostat = NestThermostat.from_response(
             data=data,
             thermostat_id=self._thermostat_id)
 
@@ -141,7 +142,7 @@ class NestService:
 
         # Get the cutoff date and purge any records
         # that step over that line
-        cutoff_date = datetime.utcnow() - timedelta(
+        cutoff_date = datetime.now(UTC) - timedelta(
             days=self._purge_days)
 
         cutoff_timestamp = int(cutoff_date.timestamp())
@@ -173,16 +174,13 @@ class NestService:
     ) -> List[Dict[str, List[NestSensorData]]]:
 
         now = DateTimeUtil.timestamp()
-
-        hours_back = int(hours_back)
-        start_timestamp = now - (hours_back * 60 * 60)
+        start_timestamp = now - (int(hours_back) * 60 * 60)
 
         logger.info(f'Get sensor data: {start_timestamp}: {device_ids}')
 
         devices = await self._device_service.get_devices()
 
         if not any(device_ids):
-            logger.info(f'No device IDs provided, using all devices')
             device_ids = [device.device_id for device in devices]
 
         logger.info(f'Fetching data for sensors: {device_ids}')
@@ -279,6 +277,31 @@ class NestService:
             seconds_elapsed
         )
 
+    async def _handle_sensor_health_check(
+        device: NestSensorDevice
+    ) -> None:
+
+        last_record = await self._get_top_sensor_record(
+            device_id=device.device_id)
+
+        health_status, seconds_elapsed = self._get_health_status(
+            record=last_record)
+
+        logger.info(f'Health status: {device.device_id}: {health_status}: {seconds_elapsed}s')
+
+        stats = SensorHealthStats(
+            status=health_status,
+            last_contact=last_record.timestamp,
+            seconds_elapsed=seconds_elapsed)
+
+        health = SensorHealthSummary(
+            device_id=device.device_id,
+            device_name=device.device_name,
+            health=stats,
+            data=last_record)
+
+        return health
+
     async def get_sensor_info(
         self
     ) -> List[SensorHealthSummary]:
@@ -286,37 +309,9 @@ class NestService:
         logger.info(f'Getting sensor info')
         devices = await self._device_service.get_devices()
 
-        device_health = list()
-
-        # Handle the sensor health check for a single device
-        async def handle_sensor_health_check(
-            device: NestSensorDevice
-        ) -> None:
-            last_record = await self._get_top_sensor_record(
-                device_id=device.device_id)
-
-            health_status, seconds_elapsed = self._get_health_status(
-                record=last_record)
-
-            logger.info(
-                f'Health status: {device.device_id}: {health_status}: {seconds_elapsed}s')
-
-            stats = SensorHealthStats(
-                status=health_status,
-                last_contact=last_record.timestamp,
-                seconds_elapsed=seconds_elapsed)
-
-            health = SensorHealthSummary(
-                device_id=device.device_id,
-                device_name=device.device_name,
-                health=stats,
-                data=last_record)
-
-            device_health.append(health)
-
         # Fetch the sensor health info in parallel
-        await TaskCollection(*[
-            handle_sensor_health_check(device)
+        device_health = await TaskCollection(*[
+            self._handle_sensor_health_check(device)
             for device in devices
         ]).run()
 
@@ -339,10 +334,7 @@ class NestService:
             logger.info(f'Checking sensor health: {sensor_health.device_id}')
 
             # Sensor health
-            is_unhealthy = (
-                sensor_health.health.status != HealthStatus.Healthy
-            )
-
+            is_unhealthy = sensor_health.health.status != HealthStatus.Healthy
             logger.info(f'Is unhealthy: {is_unhealthy}')
 
             # If the sensor is healthy then skip it
@@ -386,7 +378,7 @@ class NestService:
             if is_alert_enabled:
 
                 # Get the email body content
-                body = self.__get_sensor_failure_email_message_body(
+                body = self._get_sensor_failure_email_message_body(
                     device=sensor_health,
                     elapsed_seconds=sensor_health.health.seconds_elapsed)
 
@@ -403,7 +395,7 @@ class NestService:
 
         return results
 
-    def __get_sensor_failure_email_message_body(
+    def _get_sensor_failure_email_message_body(
         self,
         device: NestSensorDevice,
         elapsed_seconds: int
