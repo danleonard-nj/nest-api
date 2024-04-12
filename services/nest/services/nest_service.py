@@ -23,6 +23,7 @@ from services.device_service import NestDeviceService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
 from datetime import UTC
+from datetime import UTC
 
 logger = get_logger(__name__)
 
@@ -278,6 +279,7 @@ class NestService:
         )
 
     async def _handle_sensor_health_check(
+        self,
         device: NestSensorDevice
     ) -> None:
 
