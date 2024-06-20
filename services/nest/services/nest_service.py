@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -17,15 +17,18 @@ from domain.rest import NestSensorDataRequest, SensorDataPurgeResponse
 from framework.clients.feature_client import FeatureClientAsync
 from framework.concurrency import TaskCollection
 from framework.configuration import Configuration
+from framework.exceptions.nulls import ArgumentNullException
 from framework.logger import get_logger
 from services.alert_service import AlertService
 from services.device_service import NestDeviceService
 from services.integration_service import NestIntegrationService
 from utils.utils import DateTimeUtil
-from datetime import UTC
-from datetime import UTC
 
 logger = get_logger(__name__)
+
+
+class NestServiceException(Exception):
+    pass
 
 
 class NestService:
@@ -62,12 +65,12 @@ class NestService:
         self,
         thermostat: NestThermostat
     ):
+        ArgumentNullException.if_none(thermostat, 'thermostat')
+
         logger.info('Capturing thermostat history')
 
         history = ThermostatHistory.from_thermostat(
             thermostat=thermostat)
-
-        logger.info(f'History: {history.to_dict()}')
 
         await self._thermostat_repository.insert(
             document=history.to_dict())
@@ -83,8 +86,7 @@ class NestService:
         thermostat = await self.get_thermostat()
 
         if thermostat is None:
-            logger.info('No thermostat found')
-            raise Exception('No thermostat found')
+            raise NestServiceException('No thermostat found')
 
         # Store the thermostat history
         history = await self.handle_thermostat_history(
@@ -110,13 +112,14 @@ class NestService:
         sensor_request: NestSensorDataRequest
     ) -> NestSensorData:
 
+        ArgumentNullException.if_none(sensor_request, 'sensor_request')
+
         sensor = await self._device_service.get_device(
             device_id=sensor_request.sensor_id)
 
         if sensor is None:
             logger.info(f'Sensor not found: {sensor_request.sensor_id}')
-            raise Exception(
-                f"No sensor with the ID '{sensor_request.sensor_id}' exists")
+            raise NestServiceException(f"No sensor with the ID '{sensor_request.sensor_id}' exists")
 
         # Create the sensor data record w/ stats
         sensor_data = NestSensorData(
@@ -286,6 +289,13 @@ class NestService:
         last_record = await self._get_top_sensor_record(
             device_id=device.device_id)
 
+        # If there are no sensor records for a sensor then return a no data summary
+        if last_record is None:
+            logger.info(f'No sensor data found for device: {device.device_id}')
+            return SensorHealthSummary.no_sensor_data(
+                device=device)
+
+        # Calculate health stats for sensor
         health_status, seconds_elapsed = self._get_health_status(
             record=last_record)
 

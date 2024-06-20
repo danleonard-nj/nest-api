@@ -5,7 +5,7 @@ from typing import Dict, List
 
 from framework.serialization import Serializable
 
-from domain.enums import NestCommand, NestCommandType, ThermostatMode
+from domain.enums import HealthStatus, NestCommand, NestCommandType, ThermostatMode
 from utils.utils import DateTimeUtil
 
 
@@ -132,7 +132,7 @@ class NestThermostat(Serializable):
     def is_starting_soon(
         self
     ):
-        return self.__is_starting_soon()
+        return self._is_starting_soon()
 
     def __init__(
         self,
@@ -142,9 +142,9 @@ class NestThermostat(Serializable):
         thermostat_status: str,
         fan_timer_mode: str,
         thermostat_mode: str,
-        availabe_thermostat_modes: List[str],
+        availabe_thermostat_modes: list[str],
         thermostat_eco_mode: str,
-        available_thermostat_eco_mode: List[str],
+        available_thermostat_eco_mode: list[str],
         thermostat_eco_heat_celsius: float,
         thermostat_eco_cool_celsius: float,
         hvac_status: str,
@@ -170,7 +170,7 @@ class NestThermostat(Serializable):
         self.cool_celsius = cool_celsius
         self.ambient_temperature_celsius = ambient_temperature_celsius
 
-    def __is_starting_soon(
+    def _is_starting_soon(
         self
     ):
         return (
@@ -414,6 +414,19 @@ class SensorHealthSummary(Serializable):
         return super().to_dict() | {
             'health': self.health.to_dict()
         }
+
+    @staticmethod
+    def no_sensor_data(
+        device: NestSensorDevice
+    ):
+        return SensorHealthSummary(
+            device_id=device.device_id,
+            device_name=device.device_name,
+            health=SensorHealthStats(
+                status=HealthStatus.Unhealthy,
+                last_contact=0,
+                seconds_elapsed=0),
+            data=dict())
 
 
 class SensorPollResult(Serializable):

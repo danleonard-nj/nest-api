@@ -131,4 +131,6 @@ class NestClient:
         logger.info(f'Nest auth token response: {response.status_code}')
 
         content = response.json()
-        return content.get('access_token')
+        token = content.get('access_token')
+
+        return token
